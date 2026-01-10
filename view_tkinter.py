@@ -121,7 +121,7 @@ class TkinterPDFView(PDFViewInterface):
         def _exec():
             idxs = self.controller.parse_page_ranges(ent_r.get(), len(self.controller.doc))
             if idxs is None: return messagebox.showerror("Error", "Range tidak valid")
-            fname = f"Export_{os.path.basename(self.controller.doc.name).replace('.pdf', '.csv')}"
+            fname = f"{os.path.basename(self.controller.doc.name).replace('.pdf', '.csv')}"
             win.destroy(); self.lbl_sandwich_status.config(text="Status: Mengekspor...")
             self.controller.export_text_to_csv(os.path.join(path_var.get(), fname), idxs)
             self.lbl_sandwich_status.config(text=f"Status: Berhasil ({len(idxs)} Hal)")
