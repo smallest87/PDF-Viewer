@@ -17,11 +17,21 @@ class PDFViewInterface(ABC):
     def draw_text_layer(self, words, ox, oy, zoom): pass # Tambahan baru
     
     @abstractmethod
-    def update_ui_info(self, page_num, total, zoom, is_sandwich): 
-        """Memperbarui teks informasi di UI"""
+    def update_ui_info(self, page_num, total, zoom, is_sandwich, width, height): 
+        """Memperbarui teks informasi di UI termasuk dimensi halaman"""
         pass
 
     @abstractmethod
     def get_viewport_size(self): 
         """Mendapatkan lebar/tinggi viewport saat ini"""
+        pass
+
+    @abstractmethod
+    def update_progress(self, value):
+        """Memperbarui nilai progress bar (0-100)"""
+        pass
+
+    @abstractmethod
+    def set_application_title(self, filename):
+        """Mengubah judul jendela aplikasi berdasarkan file yang dibuka"""
         pass

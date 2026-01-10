@@ -6,19 +6,34 @@ from interface import PDFViewInterface
 class TkinterPDFView(PDFViewInterface):
     def __init__(self, root, controller_class):
         self.root = root
+
+        # Definisikan nama dasar aplikasi
+        self.base_title = "Modular PDF Viewer Pro" 
+        self.root.title(self.base_title)
+
         self.controller = controller_class(self)
         self.tk_img = None
         self.text_layer_var = tk.BooleanVar(value=False)
+        self.tip_window = None  # Menangani status jendela balon teks
         self._setup_ui()
 
+    def set_application_title(self, filename):
+        """Menerapkan format judul: Nama Aplikasi - Nama File"""
+        new_title = f"{self.base_title} - {filename}"
+        self.root.title(new_title)
+
     def _setup_ui(self):
+        # --- TOOLBAR ATAS ---
         tbar = ttk.Frame(self.root, padding=5)
         tbar.pack(side=tk.TOP, fill=tk.X)
         
         ttk.Button(tbar, text="Open", command=self._on_open).pack(side=tk.LEFT)
+        # Tombol Ekspor CSV Baru
+        ttk.Button(tbar, text="Export CSV", command=self._on_export_csv).pack(side=tk.LEFT, padx=5)
+        
         ttk.Separator(tbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
         
-        # Navigasi
+        # Navigasi Halaman
         ttk.Button(tbar, text="<", command=lambda: self.controller.change_page(-1)).pack(side=tk.LEFT)
         self.pg_ent = ttk.Entry(tbar, width=5, justify="center")
         self.pg_ent.pack(side=tk.LEFT, padx=5)
@@ -29,7 +44,7 @@ class TkinterPDFView(PDFViewInterface):
         
         ttk.Separator(tbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
 
-        # TOGGLE LAYER TEKS
+        # Toggle Layer Teks
         self.text_toggle = ttk.Checkbutton(
             tbar, text="Text Layer", 
             variable=self.text_layer_var,
@@ -41,7 +56,29 @@ class TkinterPDFView(PDFViewInterface):
         ttk.Button(tbar, text="Zoom +", command=lambda: self.controller.set_zoom("in")).pack(side=tk.RIGHT)
         ttk.Button(tbar, text="Zoom -", command=lambda: self.controller.set_zoom("out")).pack(side=tk.RIGHT)
 
-        # Viewport
+        # --- STATUS BAR BAWAH ---
+        self.status_bar = ttk.Frame(self.root, relief=tk.SUNKEN, padding=(5, 2))
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        
+        self.lbl_sandwich_status = ttk.Label(self.status_bar, text="Status: -")
+        self.lbl_sandwich_status.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Separator(self.status_bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+        
+        self.lbl_page_dims = ttk.Label(self.status_bar, text="Dimensi: -")
+        self.lbl_page_dims.pack(side=tk.LEFT, padx=5)
+
+        # Progress Bar untuk Ekspor
+        self.progress = ttk.Progressbar(
+            self.status_bar, orient=tk.HORIZONTAL, 
+            length=150, mode='determinate'
+        )
+        self.progress.pack(side=tk.RIGHT, padx=10)
+
+        self.lbl_zoom_info = ttk.Label(self.status_bar, text="Zoom: 100%")
+        self.lbl_zoom_info.pack(side=tk.RIGHT, padx=5)
+
+        # --- VIEWPORT TENGAH ---
         container = tk.Frame(self.root, bg="#323639")
         container.pack(fill=tk.BOTH, expand=True)
         container.grid_columnconfigure(1, weight=1)
@@ -62,7 +99,7 @@ class TkinterPDFView(PDFViewInterface):
         self.viewport.bind("<Configure>", lambda e: self.controller.refresh())
         self.viewport.bind_all("<MouseWheel>", self._on_wheel)
 
-    # --- Implementasi Interface ---
+    # --- IMPLEMENTASI INTERFACE ---
     def get_viewport_size(self):
         self.root.update_idletasks()
         return self.viewport.winfo_width(), self.viewport.winfo_height()
@@ -77,16 +114,21 @@ class TkinterPDFView(PDFViewInterface):
         self.v_rule.config(scrollregion=region)
 
     def draw_text_layer(self, words, ox, oy, zoom):
+        """Menggambar overlay teks dan mengaktifkan tooltip"""
         for w in words:
-            self.viewport.create_rectangle(
+            rect_id = self.viewport.create_rectangle(
                 w[0]*zoom + ox, w[1]*zoom + oy, 
                 w[2]*zoom + ox, w[3]*zoom + oy,
-                outline="#0078d7", fill="#0078d7", stipple="gray25"
+                outline="#0078d7", fill="#0078d7", stipple="gray25",
+                tags="text_overlay"
             )
+            # Binding hover event
+            self.viewport.tag_bind(rect_id, "<Enter>", lambda e, txt=w[4]: self._show_tooltip(e, txt))
+            self.viewport.tag_bind(rect_id, "<Leave>", self._hide_tooltip)
+            self.viewport.tag_bind(rect_id, "<Motion>", self._move_tooltip)
 
     def draw_rulers(self, doc_w, doc_h, ox, oy, zoom):
-        self.h_rule.delete("all")
-        self.v_rule.delete("all")
+        self.h_rule.delete("all"); self.v_rule.delete("all")
         step = 100 if zoom < 1.0 else 50
         for u in range(0, int(doc_w)+1, 10):
             x = (u * zoom) + ox
@@ -99,16 +141,112 @@ class TkinterPDFView(PDFViewInterface):
                 self.v_rule.create_line(25, y, 0, y)
                 self.v_rule.create_text(2, y+2, text=str(u), anchor=tk.NW, font=("Arial", 7))
 
-    def update_ui_info(self, page_num, total, zoom, is_sandwich):
+    def update_ui_info(self, page_num, total, zoom, is_sandwich, width, height):
+        """Pembaruan status bar dan info navigasi"""
         self.pg_ent.delete(0, tk.END)
         self.pg_ent.insert(0, str(page_num))
         self.lbl_total.config(text=f"/ {total}")
+        
+        # Status sandwich
         self.text_toggle.config(state="normal" if is_sandwich else "disabled")
         if not is_sandwich: self.text_layer_var.set(False)
+        self._hide_tooltip()
 
+        # Update elemen Status Bar
+        status_txt = "Sandwich (Searchable)" if is_sandwich else "Image Only (Non-Searchable)"
+        self.lbl_sandwich_status.config(text=f"Status: {status_txt}")
+        self.lbl_page_dims.config(text=f"Dimensi: {int(width)} x {int(height)} pt")
+        self.lbl_zoom_info.config(text=f"Zoom: {int(zoom * 100)}%")
+
+    def update_progress(self, value):
+        """Memperbarui progress bar dan menjaga UI tetap responsif"""
+        self.progress['value'] = value
+        self.root.update() # Mencegah aplikasi freezing
+
+    # --- TOOLTIP HELPERS ---
+    def _show_tooltip(self, event, text):
+        if self.tip_window or not text: return
+        self.tip_window = tw = tk.Toplevel(self.root)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{event.x_root+15}+{event.y_root+10}")
+        tk.Label(
+            tw, text=text, background="#ffffca", relief=tk.SOLID, 
+            borderwidth=1, font=("Arial", "9"), padx=4, pady=2
+        ).pack()
+
+    def _move_tooltip(self, event):
+        if self.tip_window:
+            self.tip_window.wm_geometry(f"+{event.x_root+15}+{event.y_root+10}")
+
+    def _hide_tooltip(self, event=None):
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
+
+    # --- PRIVATE HELPERS ---
     def _on_open(self):
         p = filedialog.askopenfilename(filetypes=[("PDF", "*.pdf")])
-        self.controller.open_document(p)
+        if p: self.controller.open_document(p)
+
+    def _on_export_csv(self):
+        """Membuka Panel Ekspor Dinamis"""
+        if not self.controller.doc: return
+
+        # Inisialisasi data default
+        import os
+        default_folder = os.getcwd()
+        default_filename = f"{os.path.basename(self.controller.doc.name).replace('.pdf', '.csv')}"
+
+        export_win = tk.Toplevel(self.root)
+        export_win.title("Pengaturan Ekspor CSV")
+        export_win.geometry("500x300")
+        export_win.resizable(False, False)
+        export_win.grab_set() # Membuat window modal
+
+        # --- Bagian 1: Lokasi Penyimpanan ---
+        frame_path = ttk.LabelFrame(export_win, text=" Lokasi Penyimpanan ", padding=10)
+        frame_path.pack(fill=tk.X, padx=10, pady=5)
+
+        self.path_var = tk.StringVar(value=default_folder)
+        lbl_path = ttk.Label(frame_path, textvariable=self.path_var, wraplength=350, foreground="blue")
+        lbl_path.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def _change_dir():
+            d = filedialog.askdirectory(initialdir=self.path_var.get())
+            if d: self.path_var.set(d)
+
+        ttk.Button(frame_path, text="Ubah", command=_change_dir).pack(side=tk.RIGHT)
+
+        # --- Bagian 2: Rentang Halaman ---
+        frame_range = ttk.LabelFrame(export_win, text=" Kontrol Halaman ", padding=10)
+        frame_range.pack(fill=tk.X, padx=10, pady=5)
+
+        ttk.Label(frame_range, text="Masukkan halaman (misal: 1, 2, 5-10):").pack(anchor=tk.W)
+        range_ent = ttk.Entry(frame_range)
+        range_ent.insert(0, f"1-{len(self.controller.doc)}")
+        range_ent.pack(fill=tk.X, pady=5)
+
+        # --- Bagian 3: Tombol Aksi ---
+        btn_frame = ttk.Frame(export_win, padding=10)
+        btn_frame.pack(side=tk.BOTTOM, fill=tk.X)
+
+        def _run_export():
+            # Validasi input halaman
+            indices = self.controller.parse_page_ranges(range_ent.get(), len(self.controller.doc))
+            if indices is None:
+                from tkinter import messagebox
+                messagebox.showerror("Error", "Format rentang halaman tidak valid!")
+                return
+            
+            full_path = os.path.join(self.path_var.get(), default_filename)
+            export_win.destroy() # Tutup panel
+            
+            self.lbl_sandwich_status.config(text="Status: Mengekspor...")
+            self.controller.export_text_to_csv(full_path, indices)
+            self.lbl_sandwich_status.config(text=f"Status: Berhasil mengekspor {len(indices)} halaman!")
+
+        ttk.Button(btn_frame, text="Batal", command=export_win.destroy).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(btn_frame, text="Ekspor Sekarang", command=_run_export).pack(side=tk.RIGHT, padx=5)
 
     def _sync_v(self, *args):
         self.viewport.yview(*args); self.v_rule.yview(*args)
