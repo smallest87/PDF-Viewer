@@ -1,5 +1,6 @@
 import fitz
-import os # Tambahkan import os
+import os
+import csv
 
 class PDFController:
     def __init__(self, view):
@@ -8,55 +9,74 @@ class PDFController:
         self.current_page = 0
         self.zoom_level = 1.0
         self.padding = 30
-        self.show_text_layer = False # State toggle
+        self.show_text_layer = False
+        self.show_csv_layer = False
+        self.csv_data_path = None # Path file CSV dengan nama yang sama
 
     def open_document(self, path):
         if not path: return
         self.doc = fitz.open(path)
         self.current_page = 0
-
-        # Ambil nama file saja dari path lengkap
-        filename = os.path.basename(path)
-        self.view.set_application_title(filename)
-
+        
+        # Cek keberadaan file CSV di folder yang sama
+        self.csv_data_path = path.rsplit('.', 1)[0] + ".csv"
+        
+        self.view.set_application_title(os.path.basename(path))
         self.refresh()
 
     def toggle_text_layer(self, value):
         self.show_text_layer = value
         self.refresh()
 
+    def toggle_csv_layer(self, value):
+        self.show_csv_layer = value
+        self.refresh()
+
+    def _get_csv_data_for_page(self, page_num):
+        """Membaca data koordinat dari file CSV pendamping"""
+        if not self.csv_data_path or not os.path.exists(self.csv_data_path):
+            return []
+        
+        page_words = []
+        try:
+            with open(self.csv_data_path, mode='r', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f, delimiter=';')
+                for row in reader:
+                    if int(row['halaman']) == page_num:
+                        # Konversi desimal koma ke titik untuk float Python
+                        x0 = float(row['x0'].replace(',', '.'))
+                        y0 = float(row['top'].replace(',', '.'))
+                        x1 = float(row['x1'].replace(',', '.'))
+                        y1 = float(row['bottom'].replace(',', '.'))
+                        page_words.append((x0, y0, x1, y1, row['teks']))
+        except: pass
+        return page_words
+
     def refresh(self):
         if not self.doc: return
         page = self.doc[self.current_page]
-        
         vw, _ = self.view.get_viewport_size()
         mat = fitz.Matrix(self.zoom_level, self.zoom_level)
         pix = page.get_pixmap(matrix=mat)
-        
-        ox = max(0, (vw - pix.width) / 2)
-        oy = self.padding
+        ox, oy = max(0, (vw - pix.width) / 2), self.padding
         region = (0, 0, max(vw, pix.width), pix.height + (self.padding * 2))
         
-        # 1. Tampilkan Halaman Utama
         self.view.display_page(pix, ox, oy, region)
         
-        # 2. Gambar Layer Teks jika aktif
         if self.show_text_layer:
-            words = page.get_text("words")
-            self.view.draw_text_layer(words, ox, oy, self.zoom_level)
+            self.view.draw_text_layer(page.get_text("words"), ox, oy, self.zoom_level)
+            
+        if self.show_csv_layer:
+            csv_words = self._get_csv_data_for_page(self.current_page + 1)
+            self.view.draw_csv_layer(csv_words, ox, oy, self.zoom_level)
         
-        # 3. Update Rulers & UI
-        # Update Rulers & UI dengan menyertakan dimensi halaman
         self.view.draw_rulers(page.rect.width, page.rect.height, ox, oy, self.zoom_level)
         is_sandwich = bool(page.get_text().strip())
+        has_csv = os.path.exists(self.csv_data_path) if self.csv_data_path else False
         
         self.view.update_ui_info(
-            self.current_page + 1, 
-            len(self.doc), 
-            self.zoom_level, 
-            is_sandwich,
-            page.rect.width,
-            page.rect.height
+            self.current_page+1, len(self.doc), self.zoom_level, 
+            is_sandwich, page.rect.width, page.rect.height, has_csv
         )
 
     def change_page(self, delta):
@@ -75,7 +95,6 @@ class PDFController:
         self.refresh()
 
     def parse_page_ranges(self, range_str, total_pages):
-        """Mengubah string '1, 2, 5-10' menjadi list indeks [0, 1, 4, 5...6, 9]"""
         pages = set()
         try:
             for part in range_str.split(','):
@@ -85,79 +104,29 @@ class PDFController:
                     pages.update(range(start - 1, end))
                 else:
                     pages.add(int(part) - 1)
-        except:
-            return None # Input tidak valid
-        
-        # Filter agar tidak melebihi jumlah halaman yang ada
+        except: return None
         return sorted([p for p in pages if 0 <= p < total_pages])
 
     def export_text_to_csv(self, filepath, page_indices):
-        """Ekspor teks berdasarkan daftar indeks halaman tertentu"""
         if not self.doc or not page_indices: return
-        
-        total_to_export = len(page_indices)
+        total = len(page_indices)
         
         def fmt(val):
-            if isinstance(val, (float, int)):
-                return str(round(val, 2)).replace('.', ',')
+            if isinstance(val, (float, int)): return str(round(val, 2)).replace('.', ',')
             return str(val).replace(';', ' ').replace('\n', ' ').strip()
 
         header = ["nomor", "halaman", "teks", "x0", "x1", "top", "bottom", "font_style", "font_size", "sumbu"]
-        
         with open(filepath, mode='w', encoding='utf-8-sig') as f:
             f.write(";".join(header) + "\n")
-            global_index = 1
-            
-            for i, page_idx in enumerate(page_indices):
-                page = self.doc[page_idx]
-                blocks = page.get_text("dict")["blocks"]
-                for b in blocks:
-                    if b["type"] == 0:
-                        for line in b["lines"]:
-                            for span in line["spans"]:
-                                x0, y0, x1, y1 = span["bbox"]
-                                sumbu = (y0 + y1) / 2
-                                row = [global_index, page_idx + 1, span["text"], x0, x1, y0, y1, span["font"], span["size"], sumbu]
-                                f.write(";".join(map(fmt, row)) + "\n")
-                                global_index += 1
-                
-                # Update progress berdasarkan progres daftar halaman terpilih
-                self.view.update_progress(((i + 1) / total_to_export) * 100)
-            
-            self.view.update_progress(0)
-
-    def export_all_text_to_csv(self, filepath):
-        if not self.doc: return
-        total_pages = len(self.doc) #
-        
-        def fmt(val):
-            if isinstance(val, (float, int)):
-                return str(round(val, 2)).replace('.', ',')
-            return str(val).replace(';', ' ').replace('\n', ' ').strip()
-
-        header = ["nomor", "halaman", "teks", "x0", "x1", "top", "bottom", "font_style", "font_size", "sumbu"]
-        
-        with open(filepath, mode='w', encoding='utf-8-sig') as f:
-            f.write(";".join(header) + "\n")
-            global_index = 1
-            
-            for page_idx in range(total_pages):
-                page = self.doc[page_idx] #
-                blocks = page.get_text("dict")["blocks"] #
-                
-                for b in blocks:
-                    if b["type"] == 0:
-                        for line in b["lines"]:
-                            for span in line["spans"]:
-                                x0, y0, x1, y1 = span["bbox"]
-                                sumbu = (y0 + y1) / 2
-                                row = [global_index, page_idx + 1, span["text"], x0, x1, y0, y1, span["font"], span["size"], sumbu]
-                                f.write(";".join(map(fmt, row)) + "\n")
-                                global_index += 1
-                
-                # Hitung dan kirim progress ke View
-                progress_percent = ((page_idx + 1) / total_pages) * 100
-                self.view.update_progress(progress_percent)
-            
-            # Reset progress setelah selesai
+            idx = 1
+            for i, p_idx in enumerate(page_indices):
+                blocks = self.doc[p_idx].get_text("dict")["blocks"]
+                for b in [b for b in blocks if b["type"] == 0]:
+                    for line in b["lines"]:
+                        for span in line["spans"]:
+                            x0, y0, x1, y1 = span["bbox"]
+                            row = [idx, p_idx + 1, span["text"], x0, x1, y0, y1, span["font"], span["size"], (y0 + y1) / 2]
+                            f.write(";".join(map(fmt, row)) + "\n")
+                            idx += 1
+                self.view.update_progress(((i + 1) / total) * 100)
             self.view.update_progress(0)
