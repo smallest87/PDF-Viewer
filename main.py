@@ -1,6 +1,8 @@
 import tkinter as tk
-from view_tkinter import TkinterPDFView
-from controller import PDFController
+from View.main_view import TkinterPDFView # Adjusted import path
+from Controller.main_controller import PDFController
+# from view_tkinter import TkinterPDFView
+# from controller import PDFController
 
 def main():
     root = tk.Tk()
