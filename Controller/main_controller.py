@@ -87,6 +87,11 @@ class PDFController:
         """Sinkronisasi: Klik baris di Panel -> Highlight PDF"""
         try:
             row_id = str(row_data[0])
+            
+            # CEGAH REKURSIP: Jika ID sama dengan yang sudah dipilih, abaikan.
+            if self.model.selected_row_id == row_id:
+                return
+
             target_page = int(row_data[1]) - 1
             self.model.selected_row_id = row_id
             
