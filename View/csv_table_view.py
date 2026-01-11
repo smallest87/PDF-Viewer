@@ -45,6 +45,18 @@ class PyQt6CSVTableView(QWidget):
         
         self.table_view = QTableView(self)
         self.table_view.setMinimumWidth(0)
+
+        # --- TAMBAHKAN KODE INI UNTUK FIX WARNA HIGHLIGHT ---
+        self.table_view.setStyleSheet("""
+            QTableView {
+                selection-background-color: #0078d7; /* Warna biru saat aktif */
+                selection-color: white;
+            }
+            QTableView:inactive {
+                selection-background-color: #0078d7; /* Tetap biru meski kehilangan fokus */
+                selection-color: white;
+            }
+        """)
         
         # PENGGANTI setUniformRowHeights: Optimasi baris statis
         v_header = self.table_view.verticalHeader()

@@ -128,7 +128,10 @@ class PDFController:
         return grouped_ids
 
     def toggle_line_grouping(self):
-        self.view.update_highlight_only(self.model.selected_row_id)
+        """Hanya update tampilan jika ada baris yang dipilih"""
+        if self.model.selected_row_id:
+            self.view.update_highlight_only(self.model.selected_row_id)
+        # Jika tidak ada yang dipilih, fungsi diam saja (hanya mengganti state centang)
 
     def update_tolerance(self, val):
         try:
@@ -190,4 +193,5 @@ class PDFController:
             page.rect.height, 
             self.model.has_csv
         )
-        self.view.set_grouping_control_state(self.model.selected_row_id is not None)
+        # self.view.set_grouping_control_state(self.model.selected_row_id is not None)
+        self.view.set_grouping_control_state(self.model.doc is not None)

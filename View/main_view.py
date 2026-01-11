@@ -13,10 +13,14 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
         self.base_title = "PDF-Nexus Ultimate V4"
         self.setWindowTitle(self.base_title)
         self.resize(1280, 800)
-        self.controller = controller_factory(self)
         
+        # 1. Inisialisasi state/variabel (Hanya sekali)
+        self.controller = controller_factory(self)
+        self.csv_table_widget = None 
+        
+        # 2. Setup UI (Hanya panggil satu kali di sini)
         self._setup_ui()
-        self._setup_dock_widget() # Inisialisasi sistem panel
+        self._setup_dock_widget()
 
     def _setup_ui(self):
         self.central_widget = QWidget()
@@ -103,8 +107,12 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
     def set_application_title(self, f): self.setWindowTitle(f"{self.base_title} - {f}")
     def update_highlight_only(self, sid):
         self.viewport.apply_highlight_to_items(sid)
-        if self.csv_table_widget and sid: # Sinkronisasi ke panel
-            self.csv_table_widget.select_row_by_index(int(sid) - 1)
+        # Gunakan pengecekan yang lebih aman
+        if self.csv_table_widget is not None and sid is not None:
+            try:
+                self.csv_table_widget.select_row_by_index(int(sid) - 1)
+            except (ValueError, TypeError):
+                pass
     def set_grouping_control_state(self, a): self.toolbar.set_grouping_enabled(a)
     def _on_open(self):
         path, _ = QFileDialog.getOpenFileName(self, "Open PDF", "", "PDF Files (*.pdf)")
