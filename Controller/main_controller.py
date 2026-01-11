@@ -24,12 +24,10 @@ class PDFController:
             self.model.file_path = path
             self.model.csv_path = path.rsplit('.', 1)[0] + ".csv"
             self.view.set_application_title(fname)
-            self.refresh()
+            self.refresh(full_refresh=True)
 
     def open_csv_table(self):
-        """Membuka window tksheet dengan callback interaksi"""
         if not self.model.has_csv: return
-
         headers, data = [], []
         try:
             with open(self.model.csv_path, mode='r', encoding='utf-8-sig') as f:
@@ -44,80 +42,73 @@ class PDFController:
                     self.view.root, self.model.file_name, headers, data,
                     on_row_select_callback=self._handle_table_click
                 )
-        except Exception as e:
-            print(f"Error: {e}")
+        except Exception as e: print(f"Error: {e}")
 
     def _handle_table_click(self, row_data):
-        """INTERAKSI: Tabel -> PDF (Klik baris tabel highlight kotak PDF)"""
+        """Optimasi: Hanya full refresh jika ganti halaman"""
         try:
-            # 1. Simpan ID baris yang dipilih ke Model (kolom 'nomor' di indeks 0)
-            self.model.selected_row_id = str(row_data[0])
-            
-            # 2. Pindah Halaman (kolom 'halaman' di indeks 1)
+            row_id = str(row_data[0])
+            old_page = self.model.current_page
             target_page = int(row_data[1]) - 1 
-            if 0 <= target_page < len(self.model.doc):
+            self.model.selected_row_id = row_id
+            
+            if target_page == old_page:
+                self.view.update_highlight_only(row_id)
+            else:
                 self.model.current_page = target_page
-                
-            # 3. Refresh untuk update ketebalan garis
-            self.refresh()
+                self.refresh(full_refresh=True) 
         except: pass
 
     def handle_overlay_click(self, row_id):
-        """INTERAKSI: PDF -> Tabel (Klik kotak PDF highlight baris tabel)"""
+        """Prioritas Visual Instan"""
         self.model.selected_row_id = str(row_id)
+        self.view.update_highlight_only(row_id) # Langsung tebalkan
+        
         if self.table_view and self.table_view.winfo_exists():
             idx = int(row_id) - 1
-            self.table_view.select_row_by_index(idx)
-        self.refresh() # Update tampilan agar kotak menjadi tebal
+            self.view.root.after(0, lambda: self.table_view.select_row_by_index(idx))
 
-    def refresh(self):
+    def refresh(self, full_refresh=True):
         if not self.model.doc: return
-
         page = self.model.doc[self.model.current_page]
         vw, _ = self.view.get_viewport_size()
         z = self.model.zoom_level
 
-        mat = fitz.Matrix(z, z)
-        pix = page.get_pixmap(matrix=mat)
-        ox, oy = max(0, (vw - pix.width) / 2), self.model.padding
-        region = (0, 0, max(vw, pix.width), pix.height + (oy * 2))
-
-        self.view.display_page(pix, ox, oy, region)
+        if full_refresh:
+            mat = fitz.Matrix(z, z)
+            pix = page.get_pixmap(matrix=mat)
+            ox, oy = max(0, (vw - pix.width) / 2), self.model.padding
+            region = (0, 0, max(vw, pix.width), pix.height + (oy * 2))
+            self.view.display_page(pix, ox, oy, region)
+            self.view.draw_rulers(page.rect.width, page.rect.height, ox, oy, z)
+        else:
+            ox = max(0, (vw - (page.rect.width * z)) / 2)
+            oy = self.model.padding
 
         if self.overlay_mgr.show_text_layer:
             self.view.draw_text_layer(page.get_text("words"), ox, oy, z)
-
         if self.overlay_mgr.show_csv_layer:
             self.overlay_mgr.csv_path = self.model.csv_path
-            # Data harus menyertakan 'nomor' di indeks w[5]
             data = self.overlay_mgr.get_csv_data(self.model.current_page + 1)
             self.view.draw_csv_layer(data, ox, oy, z)
 
         self.model.is_sandwich = bool(page.get_text().strip())
         self.model.has_csv = os.path.exists(self.model.csv_path or "")
-        self.view.update_ui_info(
-            self.model.current_page + 1, len(self.model.doc), z, 
-            self.model.is_sandwich, page.rect.width, page.rect.height, 
-            self.model.has_csv
-        )
+        self.view.update_ui_info(self.model.current_page + 1, len(self.model.doc), z, 
+                                 self.model.is_sandwich, page.rect.width, page.rect.height, self.model.has_csv)
 
-    # Delegasi ke Manager
     def change_page(self, d):
-        if self.doc_mgr.move_page(d): self.refresh()
+        if self.doc_mgr.move_page(d): self.refresh(full_refresh=True)
     def set_zoom(self, d):
         self.doc_mgr.set_zoom(d)
-        self.refresh()
-    def toggle_text_layer(self, v):
-        self.overlay_mgr.show_text_layer = v
-        self.refresh()
-    def toggle_csv_layer(self, v):
-        self.overlay_mgr.show_csv_layer = v
-        self.refresh()
+        self.refresh(full_refresh=True)
     def jump_to_page(self, n):
         if self.model.doc and 0 < n <= len(self.model.doc):
             self.model.current_page = n - 1
-            self.refresh()
-    def export_text_to_csv(self, f, i):
-        self.export_mgr.to_csv(self.model.doc, f, i, self.view)
-    def parse_page_ranges(self, s, t):
-        return self.export_mgr.parse_ranges(s, t)
+            self.refresh(full_refresh=True)
+    def toggle_text_layer(self, v):
+        self.overlay_mgr.show_text_layer = v
+        self.refresh(full_refresh=False)
+    def toggle_csv_layer(self, v):
+        self.overlay_mgr.show_csv_layer = v
+        self.refresh(full_refresh=False)
