@@ -1,23 +1,19 @@
-from PyQt6.QtWidgets import QDialog, QTableView, QVBoxLayout, QHeaderView, QAbstractItemView
-from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex
+from PyQt6.QtWidgets import QWidget, QTableView, QVBoxLayout, QHeaderView, QAbstractItemView, QSizePolicy
+from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, QTimer
+from PyQt6.QtGui import QFont
 
-# --- 5.1 MODEL DATA (Sangat Efisien) ---
+# --- 1. MODEL DATA ---
 class CSVModel(QAbstractTableModel):
     def __init__(self, headers, data):
         super().__init__()
         self._headers = headers
         self._data = data
 
-    def rowCount(self, parent=QModelIndex()):
-        return len(self._data)
-
-    def columnCount(self, parent=QModelIndex()):
-        return len(self._headers)
+    def rowCount(self, parent=QModelIndex()): return len(self._data)
+    def columnCount(self, parent=QModelIndex()): return len(self._headers)
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
-        if not index.isValid():
-            return None
-        if role == Qt.ItemDataRole.DisplayRole:
+        if index.isValid() and role == Qt.ItemDataRole.DisplayRole:
             return str(self._data[index.row()][index.column()])
         return None
 
@@ -26,59 +22,75 @@ class CSVModel(QAbstractTableModel):
             return self._headers[section]
         return None
 
-# --- 5.2 VIEW WINDOW ---
-class PyQt6CSVTableView(QDialog):
-    """Window child untuk inspeksi data CSV menggunakan QTableView"""
-    def __init__(self, parent, title, headers, data, on_row_select_callback=None):
+# --- 2. WIDGET PANEL ---
+class PyQt6CSVTableView(QWidget):
+    def __init__(self, parent, headers, data, on_row_select_callback=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Data Inspector - {title}")
-        self.resize(900, 500)
-        
-        # Simpan callback
         self.on_row_select = on_row_select_callback
+        
+        # Izinkan panel menyusut total
+        self.setMinimumWidth(0) 
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        
+        # Timer untuk throttling log agar tidak bottleneck I/O
+        self.debug_timer = QTimer()
+        self.debug_timer.setSingleShot(True)
+        self.debug_timer.timeout.connect(self._log_resize_final)
         
         self._setup_ui(headers, data)
 
     def _setup_ui(self, headers, data):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         
-        # Inisialisasi Table View
         self.table_view = QTableView(self)
+        self.table_view.setMinimumWidth(0)
         
-        # Inisialisasi Model
+        # PENGGANTI setUniformRowHeights: Optimasi baris statis
+        v_header = self.table_view.verticalHeader()
+        v_header.setDefaultSectionSize(20)
+        v_header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed) # Sangat Cepat
+        v_header.hide()
+        
+        # Font Compact
+        self.table_view.setFont(QFont("Bahnschrift SemiLight Condensed", 9))
         self.model = CSVModel(headers, data)
         self.table_view.setModel(self.model)
         
-        # Konfigurasi Tampilan
-        header = self.table_view.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        # Optimasi Kolom (Interactive Mode)
+        h_header = self.table_view.horizontalHeader()
+        for i, header_text in enumerate(headers):
+            if "teks" in header_text.lower() or "text" in header_text.lower():
+                h_header.setSectionResizeMode(i, QHeaderView.ResizeMode.Stretch)
+            else:
+                h_header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
+                self.table_view.resizeColumnToContents(i) 
+        
         self.table_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table_view.setAlternatingRowColors(True)
-        
-        # Binding Event: Pengganti 'row_select' pada tksheet
-        self.table_view.selectionModel().selectionChanged.connect(self._row_selected)
-        
         layout.addWidget(self.table_view)
 
+        # Event Binding
+        self.table_view.selectionModel().selectionChanged.connect(self._row_selected)
+
     def _row_selected(self, selected, deselected):
-        """Trigger callback saat baris dipilih"""
         if self.on_row_select:
             indexes = self.table_view.selectionModel().selectedRows()
             if indexes:
-                row_idx = indexes[0].row()
-                # Ambil data asli dari list data model
-                row_data = self.model._data[row_idx]
-                self.on_row_select(row_data)
+                self.on_row_select(self.model._data[indexes[0].row()])
 
     def select_row_by_index(self, index):
-        """Menyorot baris secara otomatis dari PDF"""
         if 0 <= index < self.model.rowCount():
             self.table_view.selectRow(index)
-            # Otomatis scroll ke baris tujuan (see() di tksheet)
             self.table_view.scrollTo(self.model.index(index, 0))
 
-    def refresh_data(self, headers, data):
-        """Update isi tanpa tutup jendela"""
-        self.model = CSVModel(headers, data)
-        self.table_view.setModel(self.model)
+    def resizeEvent(self, event):
+        """Memicu timer log untuk menghindari bottleneck print"""
+        super().resizeEvent(event)
+        self.debug_timer.start(250) 
+
+    def _log_resize_final(self):
+        """Mencetak log hanya saat resize berhenti"""
+        main_view = self.window()
+        if hasattr(main_view, 'viewport'):
+            print(f"[DEBUG-OK] Resize Selesai -> Dock: {self.width()}px | Viewport: {main_view.viewport.width()}px")
