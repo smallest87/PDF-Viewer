@@ -1,6 +1,7 @@
 import fitz
 import os
 import csv
+import tkinter as tk
 from View.csv_table_view import CSVTableView
 
 class PDFController:
@@ -17,7 +18,12 @@ class PDFController:
         self.overlay_mgr = OverlayManager()
         self.export_mgr = ExportManager()
 
+        # Atribut untuk Fitur Line Grouping
+        self.line_grouping_enabled_var = tk.BooleanVar(value=False)
+        self.group_tolerance = 2.0
+
     def open_document(self, path):
+        """Membuka PDF dan merender awal"""
         fname = self.doc_mgr.open_pdf(path)
         if fname:
             self.model.file_name = fname
@@ -27,6 +33,7 @@ class PDFController:
             self.refresh(full_refresh=True)
 
     def open_csv_table(self):
+        """Membuka window tabel data CSV"""
         if not self.model.has_csv: return
         headers, data = [], []
         try:
@@ -42,10 +49,51 @@ class PDFController:
                     self.view.root, self.model.file_name, headers, data,
                     on_row_select_callback=self._handle_table_click
                 )
-        except Exception as e: print(f"Error: {e}")
+        except Exception as e: print(f"Error Muat Tabel: {e}")
 
+    # --- LOGIKA LINE GROUPING (BERDASARKAN KOLOM SUMBU) ---
+    def toggle_line_grouping(self):
+        """Trigger pembaruan visual saat checkbox grouping diklik"""
+        self.view.update_highlight_only(self.model.selected_row_id)
+
+    def update_tolerance(self, val):
+        """Memperbarui nilai toleransi sumbu vertikal dari input user"""
+        try:
+            # Formula: |sumbu_target - sumbu_elemen| <= toleransi
+            self.group_tolerance = float(str(val).replace(',', '.'))
+            self.view.update_highlight_only(self.model.selected_row_id)
+        except ValueError:
+            print("Nilai toleransi harus berupa angka.")
+
+    def get_grouped_ids(self):
+        """Mencari ID elemen yang memiliki 'sumbu' serupa di halaman yang sama"""
+        if not self.line_grouping_enabled_var.get() or not self.model.selected_row_id:
+            return []
+
+        grouped_ids = []
+        try:
+            with open(self.model.csv_path, mode='r', encoding='utf-8-sig') as f:
+                reader = csv.DictReader(f, delimiter=';')
+                rows = list(reader)
+                
+                # Cari baris yang saat ini dipilih
+                target = next((r for r in rows if str(r.get('nomor')) == str(self.model.selected_row_id)), None)
+                if not target: return []
+
+                target_sumbu = float(target['sumbu'].replace(',', '.'))
+                target_page = str(target['halaman'])
+
+                for r in rows:
+                    if str(r['halaman']) == target_page:
+                        curr_sumbu = float(r['sumbu'].replace(',', '.'))
+                        # Cek kedekatan posisi vertikal berdasarkan sumbu tengah
+                        if abs(curr_sumbu - target_sumbu) <= self.group_tolerance:
+                            grouped_ids.append(str(r['nomor']))
+        except: pass
+        return grouped_ids
+
+    # --- NAVIGASI & REFRESH ---
     def _handle_table_click(self, row_data):
-        """Optimasi: Hanya full refresh jika ganti halaman"""
         try:
             row_id = str(row_data[0])
             old_page = self.model.current_page
@@ -56,14 +104,12 @@ class PDFController:
                 self.view.update_highlight_only(row_id)
             else:
                 self.model.current_page = target_page
-                self.refresh(full_refresh=True) 
+                self.refresh(full_refresh=True)
         except: pass
 
     def handle_overlay_click(self, row_id):
-        """Prioritas Visual Instan"""
         self.model.selected_row_id = str(row_id)
-        self.view.update_highlight_only(row_id) # Langsung tebalkan
-        
+        self.view.update_highlight_only(row_id)
         if self.table_view and self.table_view.winfo_exists():
             idx = int(row_id) - 1
             self.view.root.after(0, lambda: self.table_view.select_row_by_index(idx))
@@ -87,6 +133,7 @@ class PDFController:
 
         if self.overlay_mgr.show_text_layer:
             self.view.draw_text_layer(page.get_text("words"), ox, oy, z)
+        
         if self.overlay_mgr.show_csv_layer:
             self.overlay_mgr.csv_path = self.model.csv_path
             data = self.overlay_mgr.get_csv_data(self.model.current_page + 1)
@@ -96,6 +143,8 @@ class PDFController:
         self.model.has_csv = os.path.exists(self.model.csv_path or "")
         self.view.update_ui_info(self.model.current_page + 1, len(self.model.doc), z, 
                                  self.model.is_sandwich, page.rect.width, page.rect.height, self.model.has_csv)
+        # Aktifkan/matikan tombolGrouping berdasarkan ada tidaknya seleksi
+        self.view.set_grouping_control_state(self.model.selected_row_id is not None)
 
     def change_page(self, d):
         if self.doc_mgr.move_page(d): self.refresh(full_refresh=True)
