@@ -1,22 +1,29 @@
-import tkinter as tk
+import sys
+from PyQt6.QtWidgets import QApplication
 from Model.document_model import PDFDocumentModel
-from View.main_view import TkinterPDFView
+from View.main_view import PyQt6PDFView
 from Controller.main_controller import PDFController
 
 def main():
-    root = tk.Tk()
-    root.title("Modular PDF Viewer Pro - MVC Version")
-    root.geometry("1100x850")
+    # 1. Inisialisasi Aplikasi Qt
+    # sys.argv digunakan agar aplikasi mendukung argumen baris perintah OS
+    app = QApplication(sys.argv)
     
-    # 1. Inisialisasi Model (Data)
+    # 2. Inisialisasi Model (State Management)
+    # Model tetap menggunakan struktur lama karena bersifat UI-Agnostic
     model = PDFDocumentModel()
     
-    # 2. Inisialisasi View & Controller via Dependency Injection
-    # Kita menggunakan lambda agar View bisa menginstansiasi Controller 
-    # dengan referensi ke dirinya sendiri dan Model.
-    app = TkinterPDFView(root, lambda v: PDFController(v, model))
+    # 3. Inisialisasi View dengan Controller Factory
+    # Lambda digunakan untuk injeksi ketergantungan (Dependency Injection)
+    # View akan membuat Controller, dan Controller akan mereferensi View tersebut
+    view = PyQt6PDFView(app, lambda v: PDFController(v, model))
     
-    root.mainloop()
+    # 4. Tampilkan Antarmuka
+    view.show()
+    
+    # 5. Jalankan Event Loop Utama
+    # sys.exit memastikan aplikasi tertutup bersih saat window di-close
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()

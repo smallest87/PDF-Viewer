@@ -1,72 +1,108 @@
-import tkinter as tk
-from tkinter import ttk
+from PyQt6.QtWidgets import (
+    QToolBar, QToolButton, QLineEdit, QLabel, 
+    QCheckBox, QWidget, QHBoxLayout
+)
+from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt
 
-class ToolbarComponent(tk.Frame):
-    def __init__(self, parent, view):
-        super().__init__(parent, bd=1, relief=tk.RAISED)
+class PyQt6Toolbar(QToolBar):
+    def __init__(self, view):
+        super().__init__("Main Toolbar", view)
         self.view = view
+        self.setMovable(False)
         self._build_ui()
 
     def _build_ui(self):
-        # --- FILE CONTROLS ---
-        ttk.Button(self, text="Open PDF", command=self.view._on_open).pack(side=tk.LEFT, padx=5)
-        ttk.Button(self, text="Export CSV", command=self.view._on_export_csv).pack(side=tk.LEFT, padx=2)
-        
-        self.btn_table = ttk.Button(self, text="📊 Table", command=self.view._on_view_csv_table)
-        self.btn_table.pack(side=tk.LEFT, padx=5)
-        self.btn_table.config(state=tk.DISABLED)
+        # 1. FILE & DATA CONTROLS
+        self.open_act = QAction("Open PDF", self)
+        self.open_act.triggered.connect(self.view._on_open)
+        self.addAction(self.open_act)
 
-        ttk.Separator(self, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        self.export_act = QAction("Export CSV", self)
+        self.export_act.triggered.connect(self.view._on_export_csv)
+        self.addAction(self.export_act)
 
-        # --- NAVIGATION ---
-        ttk.Button(self, text="<<", command=lambda: self.view.controller.change_page(-1)).pack(side=tk.LEFT)
-        
-        self.pg_ent = tk.Entry(self, width=4, justify='center')
-        self.pg_ent.pack(side=tk.LEFT, padx=2)
-        self.pg_ent.bind("<Return>", lambda e: self.view.controller.jump_to_page(int(self.pg_ent.get())))
-        
-        self.lbl_total = tk.Label(self, text="/ 0")
-        self.lbl_total.pack(side=tk.LEFT, padx=2)
-        
-        ttk.Button(self, text=">>", command=lambda: self.view.controller.change_page(1)).pack(side=tk.LEFT)
+        self.btn_table = QToolButton(self)
+        self.btn_table.setText("📊 Table")
+        self.btn_table.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.btn_table.clicked.connect(self.view._on_view_csv_table)
+        self.btn_table.setEnabled(False)
+        self.addWidget(self.btn_table)
 
-        ttk.Separator(self, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        # Penggunaan addSeparator yang benar (Metode, bukan Widget)
+        self.addSeparator()
 
-        # --- ZOOM & LAYERS ---
-        ttk.Button(self, text="Zoom +", command=lambda: self.view.controller.set_zoom("in")).pack(side=tk.LEFT)
-        ttk.Button(self, text="Zoom -", command=lambda: self.view.controller.set_zoom("out")).pack(side=tk.LEFT)
-        
-        self.text_toggle = tk.Checkbutton(self, text="Text Layer", variable=self.view.text_layer_var,
-                                          command=lambda: self.view.controller.toggle_text_layer(self.view.text_layer_var.get()))
-        self.text_toggle.pack(side=tk.LEFT, padx=5)
+        # 2. NAVIGATION
+        self.prev_act = QAction("<<", self)
+        self.prev_act.triggered.connect(lambda: self.view.controller.change_page(-1))
+        self.addAction(self.prev_act)
 
-        self.csv_toggle = tk.Checkbutton(self, text="CSV Overlay", variable=self.view.csv_overlay_var,
-                                         command=lambda: self.view.controller.toggle_csv_layer(self.view.csv_overlay_var.get()))
-        self.csv_toggle.pack(side=tk.LEFT, padx=5)
+        self.pg_ent = QLineEdit(self)
+        self.pg_ent.setFixedWidth(40)
+        self.pg_ent.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.pg_ent.returnPressed.connect(self._jump_page)
+        self.addWidget(self.pg_ent)
 
-        # --- LINE GROUPING CONTROLS (FITUR BARU) ---
-        tk.Label(self, text=" | Grouping:").pack(side=tk.LEFT, padx=(10, 0))
-        
-        # Checkbox diikat langsung ke BooleanVar di Controller
-        self.chk_group = tk.Checkbutton(
-            self, 
-            text="Line", 
-            variable=self.view.controller.line_grouping_enabled_var,
-            command=self.view.controller.toggle_line_grouping
-        )
-        self.chk_group.pack(side=tk.LEFT)
-        self.chk_group.config(state=tk.DISABLED)
+        self.lbl_total = QLabel("/ 0", self)
+        self.addWidget(self.lbl_total)
 
-        tk.Label(self, text="Tol:").pack(side=tk.LEFT)
+        self.next_act = QAction(">>", self)
+        self.next_act.triggered.connect(lambda: self.view.controller.change_page(1))
+        self.addAction(self.next_act)
+
+        self.addSeparator()
+
+        # 3. ZOOM & LAYERS
+        self.zoom_in_act = QAction("Zoom +", self)
+        self.zoom_in_act.triggered.connect(lambda: self.view.controller.set_zoom("in"))
+        self.addAction(self.zoom_in_act)
+
+        self.zoom_out_act = QAction("Zoom -", self)
+        self.zoom_out_act.triggered.connect(lambda: self.view.controller.set_zoom("out"))
+        self.addAction(self.zoom_out_act)
+
+        self.chk_text = QCheckBox("Text Layer", self)
+        self.chk_text.stateChanged.connect(lambda s: self.view.controller.toggle_text_layer(s == 2))
+        self.addWidget(self.chk_text)
+
+        self.chk_csv = QCheckBox("CSV Overlay", self)
+        self.chk_csv.stateChanged.connect(lambda s: self.view.controller.toggle_csv_layer(s == 2))
+        self.addWidget(self.chk_csv)
+
+        # 4. LINE GROUPING CONTROLS
+        self.addSeparator()
+        self.addWidget(QLabel(" | Grouping:", self))
         
-        # Entry untuk input toleransi sumbu
-        self.ent_tolerance = tk.Entry(self, width=5)
-        self.ent_tolerance.insert(0, "2.0")
-        self.ent_tolerance.pack(side=tk.LEFT, padx=2)
-        self.ent_tolerance.config(state=tk.DISABLED)
-        
-        # Bind event Enter untuk update nilai toleransi
-        self.ent_tolerance.bind(
-            "<Return>", 
-            lambda e: self.view.controller.update_tolerance(self.ent_tolerance.get())
-        )
+        self.chk_group = QCheckBox("Line", self)
+        self.chk_group.stateChanged.connect(lambda s: self.view.controller.toggle_line_grouping())
+        self.chk_group.setEnabled(False)
+        self.addWidget(self.chk_group)
+
+        self.addWidget(QLabel("Tol:", self))
+        self.ent_tolerance = QLineEdit("2.0", self)
+        self.ent_tolerance.setFixedWidth(40)
+        self.ent_tolerance.setEnabled(False)
+        self.ent_tolerance.returnPressed.connect(self._update_tol)
+        self.addWidget(self.ent_tolerance)
+
+    def _jump_page(self):
+        try:
+            val = int(self.pg_ent.text())
+            self.view.controller.jump_to_page(val)
+        except: pass
+
+    def _update_tol(self):
+        self.view.controller.update_tolerance(self.ent_tolerance.text())
+
+    def update_navigation(self, current, total):
+        self.pg_ent.setText(str(current))
+        self.lbl_total.setText(f"/ {total}")
+
+    def update_layer_states(self, is_sandwich, has_csv):
+        self.chk_text.setEnabled(is_sandwich)
+        self.chk_csv.setEnabled(has_csv)
+        self.btn_table.setEnabled(has_csv)
+
+    def set_grouping_enabled(self, active):
+        self.chk_group.setEnabled(active)
+        self.ent_tolerance.setEnabled(active)

@@ -1,141 +1,67 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
-from PIL import Image, ImageTk
+import sys
+from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QSplitter, QFileDialog, QApplication
+from PyQt6.QtCore import Qt
 from interface import PDFViewInterface
-from View.toolbar import ToolbarComponent
-from View.viewport import ViewportComponent
-from View.status_bar import StatusBarComponent
-from View.tooltip import TooltipManager
+from View.toolbar import PyQt6Toolbar
+from View.viewport import PyQt6Viewport
+from View.status_bar import PyQt6StatusBar
 
-class TkinterPDFView(PDFViewInterface):
-    def __init__(self, root, controller_factory):
-        self.root = root
-        self.base_title = "Modular PDF Viewer Pro (MVC)"
-        self.root.title(self.base_title)
-        
+class PyQt6PDFView(QMainWindow, PDFViewInterface):
+    def __init__(self, root_app, controller_factory):
+        super().__init__()
+        self.app = root_app
+        self.base_title = "PDF-Nexus Ultimate V4 (PyQt6 Edition)"
+        self.setWindowTitle(self.base_title)
+        self.resize(1200, 800)
         self.controller = controller_factory(self)
-        self.tooltip = TooltipManager(self.root)
-        self.text_layer_var = tk.BooleanVar(value=False)
-        self.csv_overlay_var = tk.BooleanVar(value=False)
-        
         self._setup_ui()
 
     def _setup_ui(self):
-        self.toolbar = ToolbarComponent(self.root, self)
-        self.toolbar.pack(side=tk.TOP, fill=tk.X)
-        self.status_bar = StatusBarComponent(self.root)
-        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-        self.viewport = ViewportComponent(self.root)
-        self.viewport.pack(fill=tk.BOTH, expand=True)
-        
-        # Local bind untuk scrolling mandiri
-        self.viewport.canvas.bind("<Configure>", lambda e: self.controller.refresh(full_refresh=True))
-        self.viewport.canvas.bind("<MouseWheel>", self._on_wheel)
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.main_layout = QVBoxLayout(self.central_widget)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        self.toolbar = PyQt6Toolbar(self)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, self.toolbar)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.viewport = PyQt6Viewport(self)
+        self.splitter.addWidget(self.viewport)
+        self.main_layout.addWidget(self.splitter)
+        self.status_bar = PyQt6StatusBar(self)
+        self.setStatusBar(self.status_bar)
 
     # --- IMPLEMENTASI INTERFACE ---
-    def draw_rulers(self, dw, dh, ox, oy, zoom):
-        self.viewport.h_rule.delete("all")
-        self.viewport.v_rule.delete("all")
-        step = 100 if zoom < 1.0 else 50
-        for u in range(0, int(dw) + 1, 10):
-            x = u * zoom + ox
-            if u % step == 0:
-                self.viewport.h_rule.create_line(x, 25, x, 0, fill="#333333")
-                self.viewport.h_rule.create_text(x+2, 2, text=str(u), anchor=tk.NW, font=("Arial", 7))
-        for u in range(0, int(dh) + 1, 10):
-            y = u * zoom + oy
-            if u % step == 0:
-                self.viewport.v_rule.create_line(25, y, 0, y, fill="#333333")
-                self.viewport.v_rule.create_text(2, y+2, text=str(u), anchor=tk.NW, font=("Arial", 7))
-
     def display_page(self, pix, ox, oy, region):
-        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        self.viewport.tk_img = ImageTk.PhotoImage(img)
-        self.viewport.canvas.delete("pdf_bg")
-        self.viewport.canvas.create_image(ox, oy, anchor=tk.NW, image=self.viewport.tk_img, tags="pdf_bg")
-        self.viewport.canvas.tag_lower("pdf_bg")
-        self.viewport.canvas.config(scrollregion=region)
+        from PyQt6.QtGui import QImage, QPixmap
+        qimg = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format.Format_RGB888)
+        self.viewport.set_background_pdf(QPixmap.fromImage(qimg), ox, oy, region)
 
-    def draw_text_layer(self, words, ox, oy, zoom):
-        self.viewport.canvas.delete("text_layer")
-        self._draw_overlay(words, ox, oy, zoom, "#0078d7", "text_layer")
+    def draw_rulers(self, doc_w, doc_h, ox, oy, zoom): self.viewport.update_rulers(doc_w, doc_h, ox, oy, zoom)
+    def draw_text_layer(self, words, ox, oy, zoom): self.viewport.render_overlay_layer(words, ox, oy, zoom, "text_layer")
+    def draw_csv_layer(self, words, ox, oy, zoom): self.viewport.render_overlay_layer(words, ox, oy, zoom, "csv_layer")
+    
+    # JEMBATAN KE VIEWPORT
+    def clear_overlay_layer(self, tag): self.viewport.clear_overlay_layer(tag)
 
-    def draw_csv_layer(self, words, ox, oy, zoom):
-        self.viewport.canvas.delete("csv_layer")
-        self._draw_overlay(words, ox, oy, zoom, "#28a745", "csv_layer")
+    def update_ui_info(self, page_num, total, zoom, is_sandwich, width, height, has_csv):
+        self.toolbar.update_navigation(page_num, total)
+        self.toolbar.update_layer_states(is_sandwich, has_csv)
+        self.status_bar.update_status(zoom, is_sandwich, width, height)
 
-    # --- FITUR HIGHLIGHT & GROUPING VISUAL ---
-    def set_grouping_control_state(self, active):
-        st = tk.NORMAL if active else tk.DISABLED
-        if hasattr(self.toolbar, 'chk_group'): self.toolbar.chk_group.config(state=st)
-        if hasattr(self.toolbar, 'ent_tolerance'): self.toolbar.ent_tolerance.config(state=st)
+    def get_viewport_size(self): return self.viewport.width(), self.viewport.height()
+    def update_progress(self, value):
+        self.status_bar.set_progress(value)
+        self.app.processEvents()
 
-    def update_highlight_only(self, selected_id):
-        """Update visual instan tanpa render ulang PDF"""
-        self.viewport.canvas.itemconfig("csv_layer", width=1, outline="#28a745")
-        
-        # Highlight grup baris (Oranye)
-        grouped_ids = self.controller.get_grouped_ids()
-        for g_id in grouped_ids:
-            self.viewport.canvas.itemconfig(f"item_{g_id}", width=3, outline="orange")
-        
-        # Highlight utama (Merah)
-        target_tag = f"item_{selected_id}"
-        self.viewport.canvas.itemconfig(target_tag, width=4, outline="red")
-        self.viewport.canvas.tag_raise(target_tag)
+    def set_application_title(self, filename): self.setWindowTitle(f"{self.base_title} - {filename}")
+    def update_highlight_only(self, selected_id): self.viewport.apply_highlight_to_items(selected_id)
+    def set_grouping_control_state(self, active): self.toolbar.set_grouping_enabled(active)
 
-    def _draw_overlay(self, words, ox, oy, zoom, color, tag):
-        """Metode inti penampil overlay dengan tagging unik per ID"""
-        selected_id = self.controller.model.selected_row_id
-        grouped_ids = self.controller.get_grouped_ids() if tag == "csv_layer" else []
-
-        for w in words:
-            # w = (x0, y0, x1, y1, teks, nomor)
-            x0, y0, x1, y1 = w[0], w[1], w[2], w[3]
-            txt, row_id = w[4], w[5] if len(w) > 5 else None
-            
-            rid_str = str(row_id)
-            is_active = (rid_str == str(selected_id))
-            is_grouped = (rid_str in grouped_ids)
-
-            o_col, l_wid = color, 1
-            if is_active: o_col, l_wid = "red", 4
-            elif is_grouped: o_col, l_wid = "orange", 3
-
-            r_id = self.viewport.canvas.create_rectangle(
-                x0*zoom+ox, y0*zoom+oy, x1*zoom+ox, y1*zoom+oy, 
-                outline=o_col, width=l_wid, fill=color, stipple="gray25", 
-                tags=(tag, f"item_{row_id}")
-            )
-            
-            # Tooltip & Click Event Bindings
-            self.viewport.canvas.tag_bind(r_id, "<Enter>", lambda e, t=txt, c=(x0,y0,x1,y1): self.tooltip.show(e,t,c))
-            self.viewport.canvas.tag_bind(r_id, "<Leave>", lambda e: self.tooltip.hide())
-            if tag == "csv_layer" and row_id:
-                self.viewport.canvas.tag_bind(r_id, "<Button-1>", lambda e, rid=row_id: self.controller.handle_overlay_click(rid))
-
-    def update_ui_info(self, pn, total, z, is_s, w, h, has_csv):
-        self.toolbar.pg_ent.delete(0, tk.END); self.toolbar.pg_ent.insert(0, str(pn))
-        self.toolbar.lbl_total.config(text=f"/ {total}")
-        self.toolbar.text_toggle.config(state=tk.NORMAL if is_s else tk.DISABLED)
-        self.toolbar.csv_toggle.config(state=tk.NORMAL if has_csv else tk.DISABLED)
-        self.toolbar.btn_table.config(state=tk.NORMAL if has_csv else tk.DISABLED)
-
-    # --- HANDLERS NAVIGASI ---
+    # --- HANDLERS ---
     def _on_open(self):
-        p = filedialog.askopenfilename(filetypes=[("PDF", "*.pdf")])
-        if p: self.controller.open_document(p)
-
-    def _on_view_csv_table(self):
-        self.controller.open_csv_table()
-
-    def _on_export_csv(self):
-        pass # Silakan isi logika ekspor Anda kembali di sini
-
-    def _on_wheel(self, e):
-        d = int(-1*(e.delta/120))
-        self.viewport.canvas.yview_scroll(d, "units")
-
-    def set_application_title(self, f): self.root.title(f"{self.base_title} - {f}")
-    def update_progress(self, v): self.status_bar.progress['value'] = v; self.root.update()
-    def get_viewport_size(self): self.root.update_idletasks(); return self.viewport.canvas.winfo_width(), self.viewport.canvas.winfo_height()
+        path, _ = QFileDialog.getOpenFileName(self, "Open PDF", "", "PDF Files (*.pdf)")
+        if path: self.controller.open_document(path)
+    def _on_view_csv_table(self): self.controller.open_csv_table()
+    def _on_export_csv(self): pass
