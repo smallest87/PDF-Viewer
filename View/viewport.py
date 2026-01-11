@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QPen, QColor, QBrush, QPainter
 
-# Import komponen modular (sesuaikan path jika berbeda folder)
+# Import komponen modular penggaris
 from View.components.ruler_system import RulerWrapper 
 
 class ClickableGraphicsView(QGraphicsView):
@@ -33,7 +33,7 @@ class PyQt6Viewport(QFrame):
         self.scene = QGraphicsScene()
         self.graphics_view = ClickableGraphicsView(self.scene, self)
         
-        # Integrasi Modular Ruler
+        # Integrasi Modular Ruler (Penggaris)
         self.container = RulerWrapper(self.graphics_view)
         
         self.overlay_items = {}
@@ -88,18 +88,35 @@ class PyQt6Viewport(QFrame):
                 self.overlay_items[row_id] = item
 
     def apply_highlight_to_items(self, selected_id):
+        """Pemusatan Vertikal Eksklusif: Menjaga kursor horizontal tetap di tempatnya."""
         grouped_ids = self.view.controller.get_grouped_ids()
         sel_id_str = str(selected_id)
+        
+        target_item = None
         for row_id, item in self.overlay_items.items():
             rid = str(row_id)
             is_active = (rid == sel_id_str)
             is_grouped = (rid in grouped_ids)
+            
             if is_active:
                 item.setPen(QPen(QColor("red"), 3))
                 item.setZValue(10)
+                target_item = item # Referensi untuk centering
             elif is_grouped:
                 item.setPen(QPen(QColor("orange"), 2))
                 item.setZValue(5)
             else:
                 item.setPen(QPen(QColor("#28a745"), 1))
                 item.setZValue(1)
+        
+        # LOGIKA PEMUSATAN VERTIKAL SAJA
+        if target_item:
+            # 1. Dapatkan pusat viewport saat ini dipetakan ke koordinat scene (Sumbu X)
+            current_view_center = self.graphics_view.viewport().rect().center()
+            current_scene_center = self.graphics_view.mapToScene(current_view_center)
+            
+            # 2. Dapatkan pusat vertikal dari item target (Sumbu Y)
+            target_center_y = target_item.sceneBoundingRect().center().y()
+            
+            # 3. Lakukan pemusatan dengan mempertahankan X lama dan memperbarui Y baru
+            self.graphics_view.centerOn(current_scene_center.x(), target_center_y)
