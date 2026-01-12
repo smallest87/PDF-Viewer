@@ -29,7 +29,7 @@ class ModularRuler(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.fillRect(self.rect(), QColor("#f0f0f0"))
+        p.fillRect(self.rect(), QColor("#bcbcbc"))
         p.setPen(QPen(QColor("#333333"), 1))
         
         is_horz = self.orientation == Qt.Orientation.Horizontal
@@ -75,7 +75,7 @@ class RulerWrapper(QWidget):
         
         corner = QWidget()
         corner.setFixedSize(25, 25)
-        corner.setStyleSheet("background-color: #f0f0f0;")
+        corner.setStyleSheet("background-color: #bcbcbc;")
         
         layout.addWidget(corner, 0, 0)
         layout.addWidget(self.h_ruler, 0, 1)

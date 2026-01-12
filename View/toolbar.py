@@ -12,27 +12,26 @@ class PyQt6Toolbar(QToolBar):
         
         # Konfigurasi Utama: Hanya Ikon
         self.setMovable(False)
-        self.setIconSize(QSize(20, 20))
+        self.setIconSize(QSize(24, 24))
         # MODE INI PENTING: Memastikan teks simbol dirender sebagai ikon
         self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         
         # Styling Profesional
         self.setStyleSheet("""
             QToolBar {
-                background: #ffffff;
+                background: #bcbcbc;
                 border-bottom: 1px solid #d1d1d1;
-                spacing: 8px;
                 padding: 4px;
             }
             QToolButton {
-                border-radius: 4px;
                 background-color: transparent;
                 font-weight: bold; /* Agar simbol +/- terlihat tegas */
                 font-size: 16px;
+                padding: 4px;
             }
             QToolButton:hover {
-                background-color: #f0f0f0;
-                border: 1px solid #c0c0c0;
+                background-color: #f3f6f4;
+                border: 2px solid #eeeeee;
             }
             QLineEdit {
                 border: 1px solid #cccccc;

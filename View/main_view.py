@@ -5,6 +5,8 @@ from View.toolbar import PyQt6Toolbar
 from View.viewport import PyQt6Viewport
 from View.status_bar import PyQt6StatusBar
 from View.dockers.csv_table_view import PyQt6CSVTableView
+from View.dockers.layer_manager import LayerManagerWidget
+from View.dockers.coordinate_dock import CoordinateDock
 
 class PyQt6PDFView(QMainWindow, PDFViewInterface):
     def __init__(self, root_app, controller_factory):
@@ -43,6 +45,7 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
         self.setStatusBar(self.status_bar)
 
     def _setup_dock_widget(self):
+    
         self.csv_dock = QDockWidget("CSV Data Inspector", self)
         self.csv_dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetMovable | 
@@ -52,6 +55,27 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
         self.csv_dock.setAllowedAreas(Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea)
         self.csv_dock.setVisible(False)
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.csv_dock)
+
+        # Dock Koordinat Realtime
+        self.dock_coords = QDockWidget("Live Coordinates", self)
+        self.coord_widget = CoordinateDock()
+        self.dock_coords.setWidget(self.coord_widget)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock_coords)
+
+        # Dock Baru untuk Layer
+        self.layer_dock = QDockWidget("Layers", self)
+        self.layer_manager = LayerManagerWidget(self.controller)
+        self.layer_dock.setWidget(self.layer_manager)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.layer_dock)
+
+    # Tambahkan metode baru di PyQt6PDFView:
+    def update_coord_display(self, x0, top):
+        """Update label koordinat atau tampilkan '-' jika di luar jangkauan."""
+        if x0 is None or top is None:
+            # Panggil metode update_coords dengan nilai kosong
+            self.coord_widget.update_coords(None, None)
+        else:
+            self.coord_widget.update_coords(x0, top)
 
     def show_csv_panel(self, headers, data):
         """Menampilkan widget tabel di dalam panel dock."""

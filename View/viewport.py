@@ -12,9 +12,30 @@ class ClickableGraphicsView(QGraphicsView):
     def __init__(self, scene, viewport_parent):
         super().__init__(scene)
         self.viewport_parent = viewport_parent
+
+        # AKTIFKAN TRACKING MOUSE
+        self.setMouseTracking(True)
+
         self.setRenderHint(QPainter.RenderHint.Antialiasing)
         self.setStyleSheet("background-color: #323639; border: none;")
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
+
+    def mouseMoveEvent(self, event):
+        """Menangkap koordinat scene saat mouse bergerak."""
+        # 1. Konversi posisi mouse ke koordinat Scene
+        scene_pos = self.mapToScene(event.pos())
+        
+        # 2. Kirim data ke Main View (via Viewport Parent)
+        self.viewport_parent.on_mouse_moved(scene_pos)
+        
+        # 3. Cek apakah ada item (teks/csv) di bawah kursor
+        item = self.itemAt(event.pos())
+        if item and isinstance(item, QGraphicsRectItem):
+            # Jika item adalah overlay, ambil data koordinat aslinya
+            # (Pastikan item memiliki data koordinat PDF asli jika diperlukan)
+            pass 
+
+        super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -33,11 +54,34 @@ class PyQt6Viewport(QFrame):
         self.scene = QGraphicsScene()
         self.graphics_view = ClickableGraphicsView(self.scene, self)
         
-        # Integrasi Modular Ruler (Penggaris)
-        self.container = RulerWrapper(self.graphics_view)
+        # Penampung variabel transformasi
+        self.last_ox = 0
+        self.last_oy = 0
+        self.last_zoom = 1.0
+        self.last_doc_w = 0 # Tambahkan ini
+        self.last_doc_h = 0 # Tambahkan ini
         
+        self.container = RulerWrapper(self.graphics_view)
         self.overlay_items = {}
         self._setup_layout()
+
+    def on_mouse_moved(self, scene_pos):
+        """Logika konversi dengan pengecekan batas halaman."""
+        # 1. Cek apakah ada dokumen aktif
+        if not self.view.controller.model.doc or self.last_zoom <= 0:
+            self.view.update_coord_display(None, None)
+            return
+
+        # 2. Hitung koordinat relatif terhadap PDF asli
+        pdf_x = (scene_pos.x() - self.last_ox) / self.last_zoom
+        pdf_top = (scene_pos.y() - self.last_oy) / self.last_zoom
+
+        # 3. Validasi: Hanya aktif jika di dalam area halaman (0 sampai lebar/tinggi)
+        if 0 <= pdf_x <= self.last_doc_w and 0 <= pdf_top <= self.last_doc_h:
+            self.view.update_coord_display(pdf_x, pdf_top)
+        else:
+            # Jika di luar halaman, kirim None untuk mengosongkan display
+            self.view.update_coord_display(None, None)
 
     def _setup_layout(self):
         layout = QVBoxLayout(self)
@@ -45,7 +89,12 @@ class PyQt6Viewport(QFrame):
         layout.addWidget(self.container)
 
     def update_rulers(self, doc_w, doc_h, ox, oy, zoom):
-        """Update penggaris melalui wrapper modular."""
+        """Update penggaris dan simpan nilai transformasi."""
+        self.last_ox = ox
+        self.last_oy = oy
+        self.last_zoom = zoom
+        self.last_doc_w = doc_w # Simpan lebar dokumen asli
+        self.last_doc_h = doc_h # Simpan tinggi dokumen asli
         self.container.set_params(doc_w, doc_h, ox, oy, zoom)
 
     def set_background_pdf(self, pixmap, ox, oy, region):
