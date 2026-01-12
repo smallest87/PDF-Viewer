@@ -7,94 +7,62 @@ from PyQt6.QtGui import (QFont, QColor, QBrush, QTextDocument, QTextCursor, QTex
 # 1. DELEGATE: LOGIKA PEWARNAAN KARAKTER & WORDWRAP DINAMIS
 # =============================================================================
 class OCRTextDelegate(QStyledItemDelegate):
-    """
-    Delegate ini bertanggung jawab merender isi cell kolom 'teks'.
-    Fitur utama: Pewarnaan angka vs huruf (deteksi OCR) dan WordWrap.
-    """
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Caching: Menyimpan objek QTextDocument yang sudah dirender.
-        # Tanpa cache, navigasi (scroll/panah) akan lag karena CPU terus membedah string.
         self._doc_cache = {} 
 
     def _get_document(self, text, width, font):
-        """
-        Alur Logika:
-        1. Cek apakah teks dengan lebar kolom ini sudah ada di cache.
-        2. Jika belum, buat QTextDocument baru.
-        3. Gunakan QTextCursor untuk menyisipkan karakter satu per satu.
-        4. Jika karakter = Angka -> Biru, selain itu -> Cokelat.
-        """
         cache_key = (text, width)
         if cache_key in self._doc_cache:
             return self._doc_cache[cache_key]
 
         doc = QTextDocument()
         doc.setDefaultFont(font)
-        doc.setTextWidth(width) # Kunci WordWrap: Dokumen harus tahu batas lebarnya.
+        doc.setTextWidth(width)
         
         cursor = QTextCursor(doc)
-        
-        # Format Karakter
         format_num = QTextCharFormat()
-        format_num.setForeground(QColor("#0000FF")) # Biru untuk Angka
+        format_num.setForeground(QColor("#0000FF")) 
         format_text = QTextCharFormat()
-        format_text.setForeground(QColor("#8B4513")) # Cokelat untuk Huruf
+        format_text.setForeground(QColor("#8B4513")) 
 
         for char in text:
-            # Masukkan teks dengan format berbeda berdasarkan jenis karakter
             cursor.insertText(char, format_num if char.isdigit() else format_text)
         
-        # Manajemen Cache: Bersihkan jika terlalu besar (>500 entri) untuk hemat RAM.
         if len(self._doc_cache) > 500: self._doc_cache.clear() 
         self._doc_cache[cache_key] = doc
         return doc
 
     def paint(self, painter, option, index):
-        """Menggambar isi sel ke layar."""
         text = str(index.data(Qt.ItemDataRole.DisplayRole))
         if not text: return super().paint(painter, option, index)
 
         painter.save()
-        
-        # Render background biru jika baris sedang dipilih (Selected)
         if option.state & QStyle.StateFlag.State_Selected:
             painter.fillRect(option.rect, option.palette.highlight())
 
-        # Ambil dokumen dari cache (Efisiensi 60 FPS)
         doc = self._get_document(text, option.rect.width(), option.font)
-        
-        # Pindahkan koordinat painter ke posisi sel saat ini
         painter.translate(option.rect.x(), option.rect.y())
-        # Batasi area gambar agar teks tidak 'lubere' ke kolom/baris sebelah
         painter.setClipRect(0, 0, option.rect.width(), option.rect.height())
         doc.drawContents(painter)
-        
         painter.restore()
 
     def sizeHint(self, option, index):
-        """Memberitahu tabel berapa tinggi yang dibutuhkan agar teks tidak terpotong."""
         text = str(index.data(Qt.ItemDataRole.DisplayRole))
         view = option.widget
-        # Ambil lebar aktual kolom saat ini dari view
         width = view.columnWidth(index.column()) if view else 200
         doc = self._get_document(text, width, option.font)
-        
-        # Tinggi sel akan mengikuti tinggi dokumen hasil wrapping
         return doc.size().toSize()
 
 # =============================================================================
-# 2. MODEL: PENGELOLA DATA (MVC PATTERN)
+# 2. MODEL: PENGELOLA DATA (AUTO-SAVE TRIGGER)
 # =============================================================================
 class CSVModel(QAbstractTableModel):
-    """
-    Model ini menyimpan data asli dan menangani interaksi data.
-    """
-    def __init__(self, headers, data):
-        super().__init__()
+    def __init__(self, headers, data, parent=None):
+        super().__init__(parent) # Parent dikirim agar bisa akses Controller
         self._headers = headers
         self._data = data
-        self.marked_ids = set() # ID baris yang masuk dalam grup (warna kuning)
+        self.marked_ids = set()
 
     def rowCount(self, parent=QModelIndex()): return len(self._data)
     def columnCount(self, parent=QModelIndex()): return len(self._headers)
@@ -103,35 +71,33 @@ class CSVModel(QAbstractTableModel):
         if not index.isValid(): return None
         row_idx, col_idx = index.row(), index.column()
         
-        # Role Display/Edit: Mengembalikan teks mentah
         if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             return str(self._data[row_idx][col_idx])
             
-        # Role Background: Memberi warna kuning jika ID baris ada di marked_ids
         if role == Qt.ItemDataRole.BackgroundRole:
             if str(self._data[row_idx][0]) in self.marked_ids:
                 return QBrush(QColor(255, 243, 176))
         return None
 
     def flags(self, index):
-        # Mengaktifkan fitur double-click untuk edit cell
         return super().flags(index) | Qt.ItemFlag.ItemIsEditable
 
     def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
-        """Menyimpan data hasil editan user kembali ke list internal."""
+        """Menyimpan editan ke memori dan memicu auto-save ke file fisik."""
         if index.isValid() and role == Qt.ItemDataRole.EditRole:
+            # 1. Update list internal
             self._data[index.row()][index.column()] = value
-            # Emit dataChanged hanya pada cell tersebut agar UI refresh
             self.dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole])
+            
+            # 2. Trigger Simpan via Hirarki: TableView -> MainView -> Controller
+            table_widget = self.parent() 
+            if hasattr(table_widget, 'view') and hasattr(table_widget.view, 'controller'):
+                table_widget.view.controller.save_csv_data(self._headers, self._data)
+                
             return True
         return False
 
     def set_marked_ids(self, ids):
-        """
-        Update warna grup secara efisien.
-        Alur: Update set ID -> Beritahu view agar gambar ulang (dataChanged).
-        Kunci: Jangan pakai beginResetModel agar kursor tidak melompat.
-        """
         self.marked_ids = set(ids) if ids else set()
         self.dataChanged.emit(self.index(0, 0), 
                               self.index(self.rowCount()-1, self.columnCount()-1), 
@@ -143,13 +109,13 @@ class CSVModel(QAbstractTableModel):
         return None
 
 # =============================================================================
-# 3. VIEW: KOMPONEN TABEL DENGAN OPTIMASI UI
+# 3. VIEW: KOMPONEN TABEL
 # =============================================================================
 class PyQt6CSVTableView(QWidget):
     def __init__(self, parent, headers, data, on_row_select_callback=None):
         super().__init__(parent)
+        self.view = parent # Simpan referensi ke Main View
         self.on_row_select = on_row_select_callback
-        # Deteksi otomatis indeks kolom teks/text
         self.text_col_index = next((i for i, h in enumerate(headers) if "teks" in h.lower() or "text" in h.lower()), -1)
         self._setup_ui(headers, data)
 
@@ -159,31 +125,26 @@ class PyQt6CSVTableView(QWidget):
         self.table_view = QTableView(self)
         self.table_view.setWordWrap(True)
         
-        # Optimasi Vertical Header: Gunakan ukuran tetap agar tidak freeze di awal
         v_header = self.table_view.verticalHeader()
         v_header.setDefaultSectionSize(25)
         v_header.hide()
 
-        self.model = CSVModel(headers, data)
+        # Inisialisasi model dengan 'self' sebagai parent
+        self.model = CSVModel(headers, data, self) 
         self.table_view.setModel(self.model)
 
-        # Pasang delegate khusus untuk kolom teks agar berwarna biru/cokelat
         if self.text_col_index != -1:
             self.delegate = OCRTextDelegate(self)
             self.table_view.setItemDelegateForColumn(self.text_col_index, self.delegate)
         
         h_header = self.table_view.horizontalHeader()
-        # Hubungkan sinyal geser kolom ke fungsi resize baris (Excel-style)
         h_header.sectionResized.connect(self._on_column_resized)
 
-        # Setup Lebar Kolom
         for i in range(len(headers)):
-            # Pakai Interactive agar Docker samping tidak kaku (Bug Resize Docker Fixed)
             h_header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
             if i == self.text_col_index:
-                self.table_view.setColumnWidth(i, 150) # Lebar default teks
+                self.table_view.setColumnWidth(i, 450)
             else:
-                # Fit To Content hanya dipanggil sekali di awal untuk performa
                 self.table_view.resizeColumnToContents(i)
                 self.table_view.setColumnWidth(i, self.table_view.columnWidth(i) + 15)
         
@@ -194,50 +155,34 @@ class PyQt6CSVTableView(QWidget):
         layout.addWidget(self.table_view)
 
     def _on_column_resized(self, logicalIndex, oldSize, newSize):
-        """Dipanggil saat kolom di-resize manual."""
         if logicalIndex == self.text_col_index:
-            # Kosongkan cache dokumen karena lebar berubah, wordwrap harus dihitung ulang
             if hasattr(self, 'delegate'): self.delegate._doc_cache.clear()
-            # Gunakan timer singkat (Debouncing) agar tidak berat saat ditarik cepat
             QTimer.singleShot(10, self._resize_visible_rows_only)
 
     def _resize_visible_rows_only(self):
-        """
-        STRATEGI KRUSIAL: Hanya resize baris yang tampak di layar.
-        Mencegah aplikasi Freeze jika data berjumlah ribuan.
-        """
         rect = self.table_view.viewport().rect()
         top, bottom = self.table_view.rowAt(rect.top()), self.table_view.rowAt(rect.bottom())
-        
         if top == -1: top = 0
         if bottom == -1: bottom = self.model.rowCount() - 1
 
-        # Matikan update visual sementara (Performa)
         self.table_view.setUpdatesEnabled(False)
         for row in range(top, bottom + 1):
             self.table_view.resizeRowToContents(row)
         self.table_view.setUpdatesEnabled(True)
 
     def _row_selected(self):
-        """Mengirim data baris yang dipilih ke callback luar (Controller)."""
         if self.on_row_select:
             indexes = self.table_view.selectionModel().selectedRows()
             if indexes: self.on_row_select(self.model._data[indexes[0].row()])
 
     def select_row_and_mark_group(self, target_sid, group_ids):
-        """
-        Logika pindah baris otomatis (Sync dari navigasi luar).
-        Mencegah kursor melompat ke kolom 0 dengan teknik pengecekan row aktif.
-        """
         self.model.set_marked_ids(group_ids)
         if target_sid:
             row_idx = int(target_sid) - 1
             if 0 <= row_idx < self.model.rowCount():
                 curr = self.table_view.currentIndex()
-                # Jika sudah di baris yang benar, jangan paksa selectRow (Mencegah kursor reset)
                 if curr.isValid() and curr.row() == row_idx: return
                 
-                # Pertahankan posisi kolom saat ini
                 idx = self.model.index(row_idx, curr.column() if curr.isValid() else 0)
                 self.table_view.selectionModel().blockSignals(True)
                 self.table_view.setCurrentIndex(idx)

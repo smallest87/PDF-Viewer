@@ -3,7 +3,6 @@ import os
 import csv
 
 class PDFController:
-    """Controller utama yang mengelola logika bisnis dan koordinasi pemusatan visual."""
     def __init__(self, view, model):
         self.view = view
         self.model = model
@@ -27,6 +26,22 @@ class PDFController:
             self.model.csv_path = path.rsplit('.', 1)[0] + ".csv"
             self.view.set_application_title(fname)
             self.refresh(full_refresh=True)
+
+    def save_csv_data(self, headers, data):
+        """Menulis ulang file CSV secara fisik dan memperbarui cache overlay."""
+        if not self.model.csv_path: return
+        try:
+            with open(self.model.csv_path, mode='w', encoding='utf-8-sig', newline='') as f:
+                # Gunakan quoting minimal agar semicolon aman terbungkus tanda kutip
+                writer = csv.writer(f, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(headers)
+                writer.writerows(data)
+            
+            # SINKRONISASI: Update data overlay agar perubahan teks langsung muncul di PDF
+            self.page_data_cache = self.overlay_mgr.get_csv_data(self.model.current_page + 1)
+            print(f"[DEBUG] Auto-save berhasil ke: {self.model.csv_path}")
+        except Exception as e:
+            print(f"[ERROR] Gagal menyimpan data CSV: {e}")
 
     def change_page(self, delta):
         if self.doc_mgr.move_page(delta):
@@ -52,6 +67,7 @@ class PDFController:
         self.refresh(full_refresh=False)
 
     def open_csv_table(self):
+        """Membuka tabel dari file CSV yang ada."""
         if not self.model.has_csv: return
         try:
             with open(self.model.csv_path, mode='r', encoding='utf-8-sig', newline='') as f:
@@ -63,14 +79,11 @@ class PDFController:
             print(f"Gagal memuat tabel: {e}")
 
     def _handle_table_click(self, row_data):
-        """Merespons klik tabel dengan sinkronisasi highlight dan pemusatan vertikal."""
         try:
             row_id = str(row_data[0])
             if self.model.selected_row_id == row_id: return
-
             target_page = int(row_data[1]) - 1
             self.model.selected_row_id = row_id
-            
             if target_page == self.model.current_page:
                 self.view.update_highlight_only(row_id)
             else:
@@ -106,9 +119,7 @@ class PDFController:
         except ValueError: pass
 
     def refresh(self, full_refresh=True):
-        """Orkestrasi rendering dan pemusatan item terpilih secara otomatis."""
         if not self.model.doc: return
-            
         page = self.model.doc[self.model.current_page]
         vw, _ = self.view.get_viewport_size()
         z = self.model.zoom_level
@@ -117,10 +128,8 @@ class PDFController:
             pix = page.get_pixmap(matrix=fitz.Matrix(z, z))
             ox, oy = max(0, (vw - pix.width) / 2), self.model.padding
             region = (0, 0, max(vw, pix.width), pix.height + (oy * 2))
-            
             self.view.display_page(pix, ox, oy, region)
             self.view.draw_rulers(page.rect.width, page.rect.height, ox, oy, z)
-            
             if os.path.exists(self.model.csv_path or ""):
                 self.overlay_mgr.csv_path = self.model.csv_path
                 self.page_data_cache = self.overlay_mgr.get_csv_data(self.model.current_page + 1)
@@ -147,19 +156,12 @@ class PDFController:
         )
         self.view.set_grouping_control_state(self.model.doc is not None)
 
-        # Memicu pemusatan vertikal otomatis jika ada item terpilih
         if self.model.selected_row_id:
             self.view.update_highlight_only(self.model.selected_row_id)
 
-    # Tambahkan metode ini di dalam kelas PDFController di main_controller.py
     def start_export(self, path, range_str):
         if not self.model.doc: return
-        
-        # Gunakan parse_ranges dari export_mgr untuk mendapatkan index halaman
         indices = self.export_mgr.parse_ranges(range_str, self.model.total_pages)
-        
         if indices is not None:
-            # Jalankan ekstraksi teks ke CSV
             self.export_mgr.to_csv(self.model.doc, path, indices, self.view)
-            # Segarkan status UI untuk mendeteksi file CSV baru jika diperlukan
             self.refresh(full_refresh=False)
