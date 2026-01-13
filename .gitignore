@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 venv/
 ENV/
+_desain/
 
 # Konfigurasi Lokal (TOML sering berisi path yang spesifik pada mesin Anda)
 # config/sistematika_config.toml (Opsional: abaikan jika berisi rahasia/path lokal)

@@ -143,7 +143,7 @@ class PyQt6CSVTableView(QWidget):
         for i in range(len(headers)):
             h_header.setSectionResizeMode(i, QHeaderView.ResizeMode.Interactive)
             if i == self.text_col_index:
-                self.table_view.setColumnWidth(i, 450)
+                self.table_view.setColumnWidth(i, 150)
             else:
                 self.table_view.resizeColumnToContents(i)
                 self.table_view.setColumnWidth(i, self.table_view.columnWidth(i) + 15)
