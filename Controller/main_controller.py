@@ -2,17 +2,15 @@ import fitz
 import os
 import csv
 from Controller.app_state import app_state
+from Controller.document_mgr import DocumentManager
+from Controller.overlay_mgr import OverlayManager
+from Controller.export_mgr import ExportManager
 
 class PDFController:
     def __init__(self, view, model):
         self.view = view
         self.model = model
-        
-        # Inisialisasi Manager Modular
-        from Controller.document_mgr import DocumentManager
-        from Controller.overlay_mgr import OverlayManager
-        from Controller.export_mgr import ExportManager
-        
+
         self.doc_mgr = DocumentManager(self.model)
         self.overlay_mgr = OverlayManager()
         self.export_mgr = ExportManager()
@@ -24,30 +22,6 @@ class PDFController:
 
         # SINKRONISASI GLOBAL: Setiap jendela bereaksi jika ada perubahan status global
         app_state.visibility_changed.connect(self._on_global_state_changed)
-
-    def _on_global_state_changed(self, tag, is_visible):
-        """Update visibilitas layer berdasarkan sinyal dari App State."""
-        if tag == "text_layer":
-            self.overlay_mgr.show_text_layer = is_visible
-        elif tag == "csv_layer":
-            self.overlay_mgr.show_csv_layer = is_visible
-        self.refresh(full_refresh=False) # Refresh tanpa render ulang pixmap
-
-    def open_document(self, path):
-        """Memuat dokumen dan melakukan pre-indexing CSV untuk performa."""
-        fname = self.doc_mgr.open_pdf(path)
-        if fname:
-            self.model.file_name = fname
-            self.model.file_path = path
-            self.model.csv_path = path.rsplit('.', 1)[0] + ".csv"
-            self.words_cache = {} # Reset cache teks untuk dokumen baru
-            
-            # OPTIMASI: Indexing CSV satu kali di awal
-            if os.path.exists(self.model.csv_path):
-                self.overlay_mgr.load_csv_to_cache(self.model.csv_path)
-                
-            self.view.set_application_title(fname)
-            self.refresh(full_refresh=True)
 
     def refresh(self, full_refresh=True):
         """Fungsi utama penyegaran tampilan dengan sistem Caching."""
@@ -103,6 +77,30 @@ class PDFController:
 
         if self.model.selected_row_id:
             self.view.update_highlight_only(self.model.selected_row_id)
+
+    def _on_global_state_changed(self, tag, is_visible):
+        """Update visibilitas layer berdasarkan sinyal dari App State."""
+        if tag == "text_layer":
+            self.overlay_mgr.show_text_layer = is_visible
+        elif tag == "csv_layer":
+            self.overlay_mgr.show_csv_layer = is_visible
+        self.refresh(full_refresh=False) # Refresh tanpa render ulang pixmap
+
+    def open_document(self, path):
+        """Memuat dokumen dan melakukan pre-indexing CSV untuk performa."""
+        fname = self.doc_mgr.open_pdf(path)
+        if fname:
+            self.model.file_name = fname
+            self.model.file_path = path
+            self.model.csv_path = path.rsplit('.', 1)[0] + ".csv"
+            self.words_cache = {} # Reset cache teks untuk dokumen baru
+            
+            # OPTIMASI: Indexing CSV satu kali di awal
+            if os.path.exists(self.model.csv_path):
+                self.overlay_mgr.load_csv_to_cache(self.model.csv_path)
+                
+            self.view.set_application_title(fname)
+            self.refresh(full_refresh=True)
 
     def save_csv_data(self, headers, data):
         """Menyimpan data dan langsung memperbarui cache overlay."""
