@@ -26,8 +26,8 @@ class PyQt6Toolbar(QToolBar):
         self._build_ui()
 
     def _get_active_controller(self):
-        if hasattr(self.view, "get_active_child"):
-            child = self.view.get_active_child()
+        if hasattr(self.view, "_get_active_child"):
+            child = self.view._get_active_child()
             return child.controller if child else None
         return None
 
@@ -87,7 +87,7 @@ class PyQt6Toolbar(QToolBar):
 
         self.chk_group = QCheckBox("G", self)
         self.chk_group.stateChanged.connect(
-            lambda s: self._exec_controller_action("toggle_line_grouping")
+            lambda s: self._exec_controller_action("_on_toggle_line_grouping")
         )
         self.chk_group.setEnabled(False)
         self.addWidget(self.chk_group)
@@ -117,7 +117,7 @@ class PyQt6Toolbar(QToolBar):
     def _update_tol(self):
         ctrl = self._get_active_controller()
         if ctrl:
-            ctrl.update_tolerance(self.ent_tolerance.text())
+            ctrl._on_update_tolerance(self.ent_tolerance.text())
 
     def update_layer_states(self, has_text, has_csv):
         self.btn_table.setEnabled(has_csv)

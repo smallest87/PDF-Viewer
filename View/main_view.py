@@ -92,7 +92,7 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
             )
             self.window_menu.addAction(action)
 
-    def get_active_child(self):
+    def _get_active_child(self):
         active_sub = self.mdi_area.activeSubWindow()
         if active_sub and isinstance(active_sub, PDFMdiChild):
             return active_sub
@@ -100,7 +100,7 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
 
     def _on_subwindow_activated(self, window):
         if window and isinstance(window, PDFMdiChild):
-            window.controller.refresh(full_refresh=False)
+            window.controller._refresh(full_refresh=False)
 
     def _setup_dock_widget(self):
         self.csv_dock = QDockWidget("CSV Data Inspector", self)
@@ -117,12 +117,12 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
         self.layer_dock.setWidget(self.layer_manager)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.layer_dock)
 
-    def update_coord_display(self, x0, top):
+    def _update_coord_display(self, x0, top):
         self.coord_widget.update_coords(x0, top)
         print(f"[DEBUG] Updated coord display to ({x0}, {top}) from MainView")
 
     def show_csv_panel(self, headers, data):
-        child = self.get_active_child()
+        child = self._get_active_child()
         if not child:
             return
         self.csv_table_widget = PyQt6CSVTableView(
@@ -154,13 +154,13 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
 
     def _on_view_csv_table(self):
         print("[DEBUG] Triggered View CSV Table")
-        child = self.get_active_child()
+        child = self._get_active_child()
         if child:
             child.controller.open_csv_table()
 
     def _on_export_csv(self):
         print("[DEBUG] Triggered Export CSV Dialog")
-        child = self.get_active_child()
+        child = self._get_active_child()
         if not child or not child.model.doc:
             return
         total = child.model.total_pages
@@ -178,12 +178,12 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
         ):
             child.controller.start_export(path, range_str)
 
-    def resizeEvent(self, event):
+    def resize_event(self, event):
         print("[DEBUG] Window Resize Event Triggered")
-        super().resizeEvent(event)
+        super().resize_event(event)
         # PERBAIKAN: Gunakan active child untuk mendapatkan lebar viewport
         if self.csv_dock.isVisible():
-            child = self.get_active_child()
+            child = self._get_active_child()
             vp_w = child.viewport.width() if child else 0
             print(
                 f"[DEBUG] Window Resize -> [Dock: {self.csv_dock.width()}px] vs [Active Viewport: {vp_w}px]"

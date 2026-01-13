@@ -24,7 +24,7 @@ class ClickableGraphicsView(QGraphicsView):
         self.setStyleSheet("background-color: #323639; border: none;")
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
 
-    def mouseMoveEvent(self, event):
+    def mouse_move_event(self, event):
         """Menangkap koordinat scene saat mouse bergerak."""
         # 1. Konversi posisi mouse ke koordinat Scene
         scene_pos = self.mapToScene(event.pos())
@@ -39,17 +39,17 @@ class ClickableGraphicsView(QGraphicsView):
             # (Pastikan item memiliki data koordinat PDF asli jika diperlukan)
             pass
 
-        super().mouseMoveEvent(event)
+        super().mouse_move_event(event)
 
-    def mousePressEvent(self, event):
+    def mouse_press_event(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             item = self.itemAt(event.pos())
             if item and isinstance(item, QGraphicsRectItem):
                 row_id = item.data(0)
                 tag = item.data(1)
                 if tag == "csv_layer" and row_id:
-                    self.viewport_parent.view.controller.handle_overlay_click(row_id)
-        super().mousePressEvent(event)
+                    self.viewport_parent.view.controller._on_overlay_click(row_id)
+        super().mouse_press_event(event)
 
 
 class PyQt6Viewport(QFrame):
@@ -74,7 +74,7 @@ class PyQt6Viewport(QFrame):
         """Logika konversi dengan pengecekan batas halaman."""
         # 1. Cek apakah ada dokumen aktif
         if not self.view.controller.model.doc or self.last_zoom <= 0:
-            self.view.update_coord_display(None, None)
+            self.view._update_coord_display(None, None)
             return
 
         # 2. Hitung koordinat relatif terhadap PDF asli
@@ -83,10 +83,10 @@ class PyQt6Viewport(QFrame):
 
         # 3. Validasi: Hanya aktif jika di dalam area halaman (0 sampai lebar/tinggi)
         if 0 <= pdf_x <= self.last_doc_w and 0 <= pdf_top <= self.last_doc_h:
-            self.view.update_coord_display(pdf_x, pdf_top)
+            self.view._update_coord_display(pdf_x, pdf_top)
         else:
             # Jika di luar halaman, kirim None untuk mengosongkan display
-            self.view.update_coord_display(None, None)
+            self.view._update_coord_display(None, None)
 
     def _setup_layout(self):
         layout = QVBoxLayout(self)
@@ -120,7 +120,7 @@ class PyQt6Viewport(QFrame):
         self.clear_overlay_layer(tag)
         color = QColor("#0078d7") if tag == "text_layer" else QColor("#28a745")
         grouped_ids = (
-            self.view.controller.get_grouped_ids() if tag == "csv_layer" else set()
+            self.view.controller._get_grouped_ids() if tag == "csv_layer" else set()
         )
         sel_id = str(self.view.controller.model.selected_row_id)
 
@@ -154,7 +154,7 @@ class PyQt6Viewport(QFrame):
 
     def apply_highlight_to_items(self, selected_id):
         """Pemusatan Vertikal Eksklusif: Menjaga kursor horizontal tetap di tempatnya."""
-        grouped_ids = self.view.controller.get_grouped_ids()
+        grouped_ids = self.view.controller._get_grouped_ids()
         sel_id_str = str(selected_id)
 
         target_item = None

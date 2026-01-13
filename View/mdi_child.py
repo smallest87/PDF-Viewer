@@ -48,10 +48,10 @@ class PDFMdiChild(QMdiSubWindow):
         """Akses ke toolbar utama aplikasi."""
         return self.parent_view.toolbar
 
-    def update_coord_display(self, x, y):
+    def _update_coord_display(self, x, y):
         """Meneruskan koordinat ke dock di jendela utama."""
         # Kita hanya update jika jendela ini yang sedang aktif/difokuskan mouse
-        self.parent_view.update_coord_display(x, y)
+        self.parent_view._update_coord_display(x, y)
 
     def show_csv_panel(self, headers, data):
         """Membuka panel CSV di dock jendela utama."""
@@ -111,7 +111,7 @@ class PDFMdiChild(QMdiSubWindow):
         self.viewport.apply_highlight_to_items(sid)
         if self.parent_view.mdi_area.activeSubWindow() == self:
             if self.parent_view.csv_table_widget:
-                grouped_ids = self.controller.get_grouped_ids()
+                grouped_ids = self.controller._get_grouped_ids()
                 self.parent_view.csv_table_widget.select_row_and_mark_group(
                     sid, grouped_ids
                 )
