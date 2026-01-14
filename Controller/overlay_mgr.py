@@ -1,4 +1,3 @@
-# File: Controller/overlay_mgr.py
 import csv
 import os
 
@@ -18,7 +17,7 @@ class OverlayManager:
         self._csv_cache = {}
 
         try:
-            with open(path, mode="r", encoding="utf-8-sig", newline="") as f:
+            with open(path, encoding="utf-8-sig", newline="") as f:
                 reader = csv.DictReader(f, delimiter=";", quotechar='"')
                 for row in reader:
                     p_num = int(row["halaman"])

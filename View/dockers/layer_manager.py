@@ -3,7 +3,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QStandardItem, QStandardItemModel
 from PyQt6.QtWidgets import QListView, QVBoxLayout, QWidget
 
-from Controller.app_state import app_state
+from controller.app_state import app_state
 
 
 class LayerManagerWidget(QWidget):

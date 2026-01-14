@@ -7,8 +7,7 @@ target-version = "py310"
 line-length = 88
 
 [tool.ruff.lint]
-# Memilih kategori aturan yang diaktifkan
-select = ["E", "F", "I", "B", "C4", "N"]
+select = ["E", "F", "B", "I", "N", "UP"] # UP untuk pyupgrade (saran Python terbaru)
 ignore = ["E501"]
 
 [tool.ruff.lint.isort]

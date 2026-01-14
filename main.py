@@ -2,9 +2,9 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 
-from Controller.main_controller import PDFController
-from Model.document_model import PDFDocumentModel
-from View.main_view import PyQt6PDFView
+from controller.main_controller import PDFController
+from model.document_model import PDFDocumentModel
+from view.main_view import PyQt6PDFView
 
 
 def main():

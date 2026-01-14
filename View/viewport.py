@@ -1,3 +1,6 @@
+from typing import override
+
+from components.ruler_system import RulerWrapper
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPen
 from PyQt6.QtWidgets import (
@@ -7,9 +10,6 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
     QVBoxLayout,
 )
-
-# Import komponen modular penggaris
-from View.components.ruler_system import RulerWrapper
 
 
 class ClickableGraphicsView(QGraphicsView):
@@ -24,7 +24,8 @@ class ClickableGraphicsView(QGraphicsView):
         self.setStyleSheet("background-color: #323639; border: none;")
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
 
-    def mouse_move_event(self, event):
+    @override
+    def mouseMoveEvent(self, event):
         """Menangkap koordinat scene saat mouse bergerak."""
         # 1. Konversi posisi mouse ke koordinat Scene
         scene_pos = self.mapToScene(event.pos())
@@ -39,9 +40,10 @@ class ClickableGraphicsView(QGraphicsView):
             # (Pastikan item memiliki data koordinat PDF asli jika diperlukan)
             pass
 
-        super().mouse_move_event(event)
+        super().mouseMoveEvent(event)
 
-    def mouse_press_event(self, event):
+    @override
+    def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             item = self.itemAt(event.pos())
             if item and isinstance(item, QGraphicsRectItem):

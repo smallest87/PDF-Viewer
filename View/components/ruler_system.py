@@ -1,3 +1,5 @@
+from typing import override
+
 from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QColor, QPainter, QPen
 from PyQt6.QtWidgets import QAbstractScrollArea, QGridLayout, QSizePolicy, QWidget
@@ -28,7 +30,8 @@ class ModularRuler(QWidget):
         self.scroll_val = scroll_val
         self.update()
 
-    def paint_event(self, event):
+    @override
+    def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.fillRect(self.rect(), QColor("#bcbcbc"))

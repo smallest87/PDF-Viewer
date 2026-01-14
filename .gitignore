@@ -10,6 +10,9 @@ _desain/
 # Konfigurasi Lokal (TOML sering berisi path yang spesifik pada mesin Anda)
 # config/sistematika_config.toml (Opsional: abaikan jika berisi rahasia/path lokal)
 
+# Ruff cache
+.ruff_cache/
+
 # IDE & OS
 .vscode/
 .idea/

@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from Controller.app_state import app_state
+from controller.app_state import app_state
 
 
 class PyQt6Toolbar(QToolBar):

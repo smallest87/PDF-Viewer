@@ -1,4 +1,10 @@
 # File: View/main_view.py
+from typing import override
+
+from dockers.coordinate_dock import CoordinateDock
+from dockers.csv_table_view import PyQt6CSVTableView
+from dockers.layer_manager import LayerManagerWidget
+from mdi_child import PDFMdiChild
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
@@ -11,15 +17,11 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from status_bar import PyQt6StatusBar
+from toolbar import PyQt6Toolbar
 
 from interface import PDFViewInterface
-from Model.document_model import PDFDocumentModel
-from View.dockers.coordinate_dock import CoordinateDock
-from View.dockers.csv_table_view import PyQt6CSVTableView
-from View.dockers.layer_manager import LayerManagerWidget
-from View.mdi_child import PDFMdiChild
-from View.status_bar import PyQt6StatusBar
-from View.toolbar import PyQt6Toolbar
+from model.document_model import PDFDocumentModel
 
 
 class PyQt6PDFView(QMainWindow, PDFViewInterface):
@@ -178,9 +180,10 @@ class PyQt6PDFView(QMainWindow, PDFViewInterface):
         ):
             child.controller.start_export(path, range_str)
 
-    def resize_event(self, event):
+    @override
+    def resizeEvent(self, event):
         print("[DEBUG] Window Resize Event Triggered")
-        super().resize_event(event)
+        super().resizeEvent(event)
         # PERBAIKAN: Gunakan active child untuk mendapatkan lebar viewport
         if self.csv_dock.isVisible():
             child = self._get_active_child()

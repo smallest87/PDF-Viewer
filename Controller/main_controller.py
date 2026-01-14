@@ -3,10 +3,10 @@ import os
 
 import fitz
 
-from Controller.app_state import app_state
-from Controller.document_mgr import DocumentManager
-from Controller.export_mgr import ExportManager
-from Controller.overlay_mgr import OverlayManager
+from .app_state import app_state
+from .document_mgr import DocumentManager
+from .export_mgr import ExportManager
+from .overlay_mgr import OverlayManager
 
 
 class PDFController:
@@ -156,9 +156,7 @@ class PDFController:
         if not self.model.has_csv:
             return
         try:
-            with open(
-                self.model.csv_path, mode="r", encoding="utf-8-sig", newline=""
-            ) as f:
+            with open(self.model.csv_path, encoding="utf-8-sig", newline="") as f:
                 reader = csv.reader(f, delimiter=";", quotechar='"')
                 headers = next(reader)
                 data = [list(row) for row in reader]
