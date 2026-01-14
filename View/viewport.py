@@ -1,6 +1,5 @@
 from typing import override
 
-from components.ruler_system import RulerWrapper
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPen
 from PyQt6.QtWidgets import (
@@ -10,6 +9,8 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
     QVBoxLayout,
 )
+
+from .components.ruler_system import RulerWrapper
 
 
 class ClickableGraphicsView(QGraphicsView):

@@ -1,10 +1,6 @@
 # File: View/main_view.py
 from typing import override
 
-from dockers.coordinate_dock import CoordinateDock
-from dockers.csv_table_view import PyQt6CSVTableView
-from dockers.layer_manager import LayerManagerWidget
-from mdi_child import PDFMdiChild
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
@@ -17,11 +13,16 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from status_bar import PyQt6StatusBar
-from toolbar import PyQt6Toolbar
 
 from interface import PDFViewInterface
 from model.document_model import PDFDocumentModel
+
+from .dockers.coordinate_dock import CoordinateDock
+from .dockers.csv_table_view import PyQt6CSVTableView
+from .dockers.layer_manager import LayerManagerWidget
+from .mdi_child import PDFMdiChild
+from .status_bar import PyQt6StatusBar
+from .toolbar import PyQt6Toolbar
 
 
 class PyQt6PDFView(QMainWindow, PDFViewInterface):

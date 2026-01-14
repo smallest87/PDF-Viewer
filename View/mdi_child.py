@@ -1,11 +1,12 @@
 # File: View/mdi_child.py
-from components.child_nav_bar import ChildNavBar  # Tambahkan import ini
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import QMdiSubWindow, QVBoxLayout, QWidget
-from viewport import PyQt6Viewport
 
 from controller.main_controller import PDFController
+
+from .components.child_nav_bar import ChildNavBar  # Tambahkan import ini
+from .viewport import PyQt6Viewport
 
 
 class PDFMdiChild(QMdiSubWindow):
