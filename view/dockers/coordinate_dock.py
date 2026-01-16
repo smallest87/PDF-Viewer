@@ -1,22 +1,48 @@
+"""Module untuk menyediakan widget dock pemantau koordinat.
+
+Menggunakan `PyQt6.QtCore.Qt` untuk mengatur enumerasi flag seperti alignment
+dan properti inti widget lainnya.
+"""
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QCheckBox, QFrame, QLabel, QVBoxLayout, QWidget
 
 
 class CoordinateDock(QWidget):
-    def __init__(self):
+    """Widget sidebar (dock) untuk menampilkan koordinat PDF secara real-time.
+
+    Widget ini menyediakan antarmuka visual untuk memantau posisi kursor (x0 dan top)
+    pada dokumen PDF serta menyediakan kontrol untuk mengaktifkan atau
+    menonaktifkan pelacakan koordinat.
+
+    Attributes:
+        chk_active (QCheckBox): Checkbox untuk mengaktifkan/matikan fitur koordinat.
+        frame (QFrame): Container visual untuk label koordinat.
+        lbl_title (QLabel): Label judul panel.
+        val_x0 (QLabel): Label untuk menampilkan nilai koordinat horizontal (x0).
+        val_top (QLabel): Label untuk menampilkan nilai koordinat vertikal (top).
+
+    """
+
+    def __init__(self) -> None:
+        """Inisialisasi komponen UI dan tata letak CoordinateDock."""
         super().__init__()
         self._setup_ui()
 
-    def _setup_ui(self):
+    def _setup_ui(self) -> None:
+        """Mengatur hierarki layout, styling CSS, dan inisialisasi widget internal.
+
+        Metode ini bersifat internal untuk membangun tampilan awal saat objek dibuat.
+        """
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)  # Memberi jarak antar elemen
+        layout.setSpacing(8)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        # 1. Kontrol Centang "Aktifkan" (Baru)
+        # 1. Kontrol Centang "Aktifkan"
         self.chk_active = QCheckBox("Aktifkan")
-        self.chk_active.setChecked(True)  # Default aktif
+        self.chk_active.setChecked(True)
         self.chk_active.setFont(QFont("Segoe UI", 9))
         self.chk_active.setStyleSheet(
             """
@@ -58,21 +84,27 @@ class CoordinateDock(QWidget):
         layout.addWidget(self.frame)
         layout.addStretch()
 
-    def update_coords(self, x0, top):
-        """Menampilkan koordinat atau tanda strip jika tidak aktif."""
+    def update_coords(self, x0: float | None, top: float | None) -> None:
+        """Memperbarui tampilan nilai koordinat pada antarmuka.
+
+        Jika salah satu koordinat bernilai None, tampilan akan diubah menjadi
+        tanda strip (-) dengan warna teks yang diredam (muted).
+
+        Args:
+            x0 (Optional[float]): Koordinat horizontal dari PDF.
+            top (Optional[float]): Koordinat vertikal dari PDF.
+
+        """
         if x0 is None or top is None:
             self.val_x0.setText("x0 :    -   ")
             self.val_top.setText("top:    -   ")
-            # Opsional: Ubah warna jadi abu-abu saat tidak aktif
-            self.val_x0.setStyleSheet(
-                "color: #adb5bd; border: none; font-weight: bold;"
-            )
-            self.val_top.setStyleSheet(
-                "color: #adb5bd; border: none; font-weight: bold;"
-            )
+            # Ubah warna jadi abu-abu saat tidak aktif
+            gray_style = "color: #adb5bd; border: none; font-weight: bold;"
+            self.val_x0.setStyleSheet(gray_style)
+            self.val_top.setStyleSheet(gray_style)
         else:
             self.val_x0.setText(f"x0 : {x0:>8.2f}")
             self.val_top.setText(f"top: {top:>8.2f}")
-            # Kembalikan warna biru saat aktif
+            # Kembalikan warna default saat aktif
             self.val_x0.setStyleSheet("border: none;")
             self.val_top.setStyleSheet("border: none;")
